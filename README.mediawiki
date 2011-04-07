@@ -15,8 +15,8 @@ Each <code>smal_buffer</code> is at the head of an <code>mmap()</code> region.
 
 == Buffer Allocation ==
 
-Each <code>smal_buffer</code> and its object allocation region are allocated from the OS via <code>mmap()</code> and is ensured to be aligned to <code>smal_buffer_size<code>.
-This is achieved by <code>mmap()</code>ing <code>smal_buffer_size * 2<code> bytes and <code>munmap()</code>ing the unaligned portion.
+Each <code>smal_buffer</code> and its object allocation region are allocated from the OS via <code>mmap()</code> and is ensured to be aligned to <code>smal_buffer_size</code>.
+This is achieved by <code>mmap()</code>ing <code>smal_buffer_size * 2</code> bytes and <code>munmap()</code>ing the unaligned portion.
 
 == Object Allocation ==
 
