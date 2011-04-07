@@ -2,7 +2,7 @@
 #define SMAL_H
 
 /********************************************************************* 
-SMAL: A Simple, barebones Mark-sweep Allocator.
+SMAL: A Simple, barebones Mark-sweep ALlocator.
 
 sgc_type represents a user-data type of a fixed size, mark and free callbacks.
 
