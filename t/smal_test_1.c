@@ -1,4 +1,5 @@
 #include "smal/smal.h"
+#include "smal/explicit_roots.h"
 
 typedef void *my_oop;
 typedef struct my_cons {
@@ -13,15 +14,16 @@ static void my_cons_mark (void *ptr)
   smal_mark_ptr(((my_cons *) ptr)->cdr);
 }
 
-static my_cons *x, *y;
 void smal_mark_roots()
 {
-  smal_mark_ptr(x);
-  smal_mark_ptr(y);
+  smal_roots_mark_chain(0);
 }
 
 int main()
 {
+  my_cons *x, *y;
+  smal_roots_2(x, y);
+
   my_cons_type = smal_type_for(sizeof(my_cons), my_cons_mark, 0);
   x = smal_type_alloc(my_cons_type);
   y = smal_type_alloc(my_cons_type);
@@ -39,6 +41,8 @@ int main()
 
   x = 0;
   smal_collect();
+
+  smal_roots_end();
 
   return 0;
 }
