@@ -446,18 +446,22 @@ void smal_mark_ptr_exact(void *ptr)
   }
 }
 
+#if 1
+#define smal_buffer_check_free_list(self) (void) 0
+#else
 static 
 void smal_buffer_check_free_list(smal_buffer *self)
 {
   void *p;
   int i = 0;
-  fprintf(stderr, "%p free_list [%d] = { ", (void*) self, (int) self->free_list_n);
+  // fprintf(stderr, "%p free_list [%d] = { ", (void*) self, (int) self->free_list_n);
   for ( p = self->free_list; p; p = *((void**) p) ) {
-    fprintf(stderr, "%p, ", p);
+    // fprintf(stderr, "%p, ", p);
     assert(++ i <= self->free_list_n);
   }
-  fprintf(stderr, "}\n");
+  // fprintf(stderr, "}\n");
 }
+#endif
 
 void *smal_buffer_alloc_object(smal_buffer *self)
 {
