@@ -49,7 +49,7 @@ size_t smal_buffer_mask = (4 * 4 * 1024) - 1;
 #define SMAL_DEBUG 0
 #endif
 
-int smal_debug_level = 4;
+int smal_debug_level = 0;
 
 #if SMAL_DEBUG
 static
@@ -422,13 +422,26 @@ void smal_mark_ptr_exact(void *ptr)
   }
 }
 
+static 
+void smal_buffer_check_free_list(smal_buffer *self)
+{
+  void *p;
+  int i = 0;
+  fprintf(stderr, "free_list [%d] = { ", (int) self->free_list_n);
+  for ( p = self->free_list; p; p = *((void**) p) ) {
+    fprintf(stderr, "%p, ", p);
+    assert(++ i <= self->free_list_n);
+  }
+  fprintf(stderr, "}\n");
+}
+
 void *smal_buffer_alloc_object(smal_buffer *self)
 {
   void *ptr;
 
   if ( (ptr = self->free_list) ) {
     assert(self->free_list_n > 0);
-    self->free_list = *(void**)self->free_list;
+    self->free_list = * (void**) ptr;
     -- self->free_list_n;
     assert(buffer_head.free_list_n > 0);
     -- buffer_head.free_list_n;
@@ -458,6 +471,8 @@ void *smal_buffer_alloc_object(smal_buffer *self)
   smal_debug(4, "  free_list_n = %d, avail_n = %d, live_n = %d",
 	     self->free_list_n, self->avail_n, self->live_n);
 
+  smal_buffer_check_free_list(self);
+
   return ptr;
 }
 
@@ -480,6 +495,7 @@ void smal_buffer_free_object(smal_buffer *self, void *ptr)
   smal_debug(4, "  free_list_n = %d, avail_n = %d, live_n = %d",
 	     self->free_list_n, self->avail_n, self->live_n);
 
+  smal_buffer_check_free_list(self);
 }
 
 
