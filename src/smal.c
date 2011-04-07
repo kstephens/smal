@@ -408,8 +408,8 @@ void smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
 	    (unsigned long) self->mark_bits.size);
 }
 
-
-void smal_mark_ptr(void *ptr)
+static inline
+void _smal_mark_ptr(void *ptr)
 {
   smal_buffer *buf;
   if ( (buf = smal_ptr_to_buffer(ptr)) ) {
@@ -431,6 +431,24 @@ void smal_mark_ptr(void *ptr)
     }
   }
 }
+
+void smal_mark_ptr(void *ptr)
+{
+  _smal_mark_ptr(ptr);
+}
+
+
+void smal_mark_ptr_range(void *ptr, void *ptr_end)
+{
+  smal_ALIGN(ptr, sizeof(int));
+  ptr_end -= sizeof(void*) - 1;
+
+  while ( ptr < ptr_end ) {
+    _smal_mark_ptr(*(void**) ptr);
+    ptr += sizeof(int);
+  }
+}
+
 
 void smal_mark_ptr_exact(void *ptr)
 {
