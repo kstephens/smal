@@ -85,6 +85,10 @@ If an object pointer is known to be allocated and aligned, <code>smal_mark_ptr_e
 and mark the bit and recurse into the <code>mark_func</code> in another 7 x86 instructions, for a worst case of 32 x86 instructions.
 The non-exact version takes approx. 39 x86 instrutions in the worst case.
 
+== Free List ==
+
+Each <code>smal_buffer</code> keeps its own <code>free_list</code>.  A free bitmap is also maintained to avoid double-free during sweep.
+
 == Mark-Sweep ==
 
 The algorithms/data structures are as follows:
