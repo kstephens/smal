@@ -13,6 +13,11 @@ Each <code>smal_buffer</code> is at the head of an <code>mmap()</code> region.
 <code>smal_type</code> defines the size of objects and other characteristics that will be allocated from one or more <code>smal_buffer</code>s.
 <code>mark_func</code> and <code>free_func</code> callback can be registered for each <code>smal_type</code>.
 
+== Buffer Allocation ==
+
+Each <code>smal_buffer</code> and its object allocation region are allocated from the OS via <code>mmap()</code> and is ensured to be aligned to <code>smal_buffer_size<code>.
+This is achieved by <code>mmap()</code>ing <code>smal_buffer_size * 2<code> bytes and <code>munmap()</code>ing the unaligned portion.
+
 == Object Allocation ==
 
 Objects are parceled, on-demand, from a <code>smal_buffer</code>, by incrementing <code>alloc_ptr</code> by a fixed object size, starting at <code>begin_ptr</code>
@@ -23,7 +28,7 @@ Objects that are returned to the <code>smal_buffer</code> are kept on its <code>
 
 === Benefits ===
 
-The alignment restrictions of <code>smal_buffers</code> ensures very minimal mmap()/OS-level fragmentation.
+The alignment restrictions of <code>smal_buffers</code> ensures very minimal <code>mmap()</code>/OS-level fragmentation.
 It also allows for very fast pointer to <code>smal_buffer</code> mapping, making SMAL
 suitable for conservative and non-conservative collection.
 
@@ -33,15 +38,15 @@ SMAL cannot service allocations large than <code>smal_buffer_size - sizeof(smal_
 
 === Characteristics ===
 
-Every potential <code>smal_buffer*</code> maps to a "buffer_id".  A <code>smal_buffer</code>'s <code>buffer_id</code> is computed
-by dividing the <code>smal_buffer</code> address by <code>smal_buffer_size</code>.
+Every potential pointer maps to a unique <code>buffer_id</code>, computed
+by dividing a <code>smal_buffer*</code> address by <code>smal_buffer_size</code>.
 
-Since the <code>smal_buffer</code> header always resides at the aligned to <code>smal_buffer_size</code>, 
+Since the <code>smal_buffer</code> header is always aligned to <code>smal_buffer_size</code>, 
 it's trivial to map a potential object ptr to a potential <code>smal_buffer*</code> or its <code>buffer_id</code>.
 
 A perfect hash table that maps <code>buffer_id</code>s to <code>smal_buffer*</code> is maintained.
 A lack of an entry in this table, means that any potential
-ptr mapping within the aligned <code>buffer_id</code> region does not come from an <code>mmap()</code>'ed <code>smal_buffer</code>.  
+ptr mapping within the aligned <code>smal_buffer_size</code> region is not an object pointer allocated from a <code>smal_buffer</code>.
 
 Because the table is guaranteed to be perfect and non-colliding, mapping arbitrary ptr to 
 smal_buffers can be done in O(1) time using a divide (or shift), a modulo and a vector index.
