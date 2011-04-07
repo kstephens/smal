@@ -378,14 +378,18 @@ void smal_mark_ptr(void *ptr)
 {
   smal_buffer *buf;
   if ( (buf = smal_ptr_to_buffer(ptr)) ) {
-    smal_debug(5, "ptr %p => buf %p", ptr, buf);
+    // smal_debug(5, "ptr %p => buf %p", ptr, buf);
     if ( smal_buffer_ptr_is_validQ(buf, ptr) ) {
-      assert(buf->buffer_id == smal_buffer_buffer_id(buf));
+      // assert(buf->buffer_id == smal_buffer_buffer_id(buf));
+#if 0
       smal_debug(6, "ptr %p is valid in buf %p", ptr, buf);
       smal_debug(7, "smal_buffer_mark_word(%p, %p) = 0x%08x", buf, ptr,
 		(unsigned int) smal_buffer_mark_word(buf, ptr));
+#endif
       if ( ! smal_buffer_markQ(buf, ptr) ) {
+#if 0
 	smal_debug(5, "ptr %p is unmarked", ptr);
+#endif
 	smal_buffer_mark(buf, ptr);
 	buf->type->mark_func(ptr);
       }
