@@ -14,7 +14,7 @@ t/smal_test_1.t : t/smal_test_1.c smal.c $(INCLUDES)
 	$(CC) $(CFLAGS) -DSMAL_UNIT_TEST=1 -o $@ $(@:.t=.c) smal.c
 
 clean :
-	rm -f smal.s t/*.t
+	rm -rf *.s *.dSYM *.o *.a t/*.t t/*.dSYM
 
 test : all t/*.t
 	set -ex; for t in t/*.t; do $$t; done

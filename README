@@ -1,0 +1,62 @@
+
+SMAL: A Simple, barebones Mark-sweep ALlocator.
+
+= Data Structure Overview
+
+smal_type represents a user-data type of a fixed size, mark and free callbacks.
+
+smal_buffer represents a mmap() region of smal_buffer_size aligned to smal_buffer_size.
+smal_buffer is at the head of the mmap() region.
+
+= Object Allocation
+
+Objects are parcelled on-demand by incrementing alloc_ptr, starting at begin_ptr.
+Objects that are returned to the smal_buffer are kept on its free_list.
+
+
+= Alignment Benefits
+
+The alignment restrictions of smal_buffers ensures very minimal mmap()/OS-level fragmentation.
+It also allows for very fast pointer to smal_buffer mapping, making SMAL
+suitable for conservative and non-conservative collection.
+
+= Alignment Lemma
+
+Every potental smal_buffer maps to a "buffer_id".  A smal_buffer's buffer_id is computed
+by dividing the smal_buffer address by smal_buffer_size.
+
+Since the smal_buffer header always resides at the aligned start of smal_buffer_size, 
+it's trivial to map a potential object ptr to a potential smal_buffer* or its buffer_id.
+
+Since each aligned smal_buffer* and its buffer_id is guaranteed to be unique, 
+a perfect hash table that maps buffer ids to smal_buffer* is maintained.  
+
+A lack of an entry in this table, means that any potential
+ptr mapping within the aligned buffer_id region does not come from an mmap()'ed smal_buffer.  
+
+Because the table is guaranteed to be non-colliding, this check can be done in O(1) time using
+a divide, a modulo and a vector index.
+
+If a smal_buffer* can be found for a potential ptr, the ptr must be within the smal_buffer's
+[ begin_ptr, alloc_ptr ) region.
+
+= Object Mark bits
+
+Each smal_buffer maintains a mark bitmap for each object parcelled from it.
+The mark bitmap is transient; it's allocated and freed during smal_collect.
+
+A pointer's mark bitmap index is computed by dividing the difference between the ptr and its smal_buffer*.
+
+= Object Marking Algoritm
+
+The algorithm/data structures are as follows:
+
+To mark a (potential) object:
+
+1) Map potential object ptr to a potential smal_buffer *.
+2) Determine if object ptr within smal_buffer region where object allocations took place.
+3) Determine if object ptr has proper alignment to the head of the object allocation.
+4) Determine the mark bitmap offset.
+5) If object is not already marked, 
+5.1) mark the object and call the smal_type's mark function.
+
