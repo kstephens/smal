@@ -20,9 +20,9 @@ This is achieved by <code>mmap()</code>ing <code>smal_buffer_size * 2</code> byt
 
 == Object Allocation ==
 
-Objects are parceled, on-demand, from a <code>smal_buffer</code>, by incrementing <code>alloc_ptr</code> by a fixed object size, starting at <code>begin_ptr</code>
-and terminating at <code>end_ptr</code>.
-Objects that are returned to the <code>smal_buffer</code> are kept on its <code>free_list</code>.
+Objects are parceled, on-demand, from a <code>smal_buffer</code>, by incrementing <code>alloc_ptr</code> by the <code>smal_type</code>'s fixed object size, <code>object_size</code>, starting at <code>begin_ptr</code> and terminating at <code>end_ptr</code>.
+Unused objects that are returned to the <code>smal_buffer</code> are kept on its <code>free_list</code>.
+<code>smal_buffers</code> without active objects are <code>munmap</code>ed and returned to the OS.
 
 == Memory Alignment ==
 
@@ -48,19 +48,21 @@ A perfect hash table that maps <code>buffer_id</code>s to <code>smal_buffer*</co
 A lack of an entry in this table, means that any potential
 ptr mapping within the aligned <code>smal_buffer_size</code> region is not an object pointer allocated from a <code>smal_buffer</code>.
 
-Because the table is guaranteed to be perfect and non-colliding, mapping arbitrary ptr to 
-smal_buffers can be done in O(1) time using a divide (or shift), a modulo and a vector index.
+Because the table is guaranteed to be perfect and non-colliding, mapping an arbitrary pointer to a 
+<code>smal_buffer</code> can be done in <code>O(1)</code> time, using a divide (or shift), a modulo and a vector index.
+This operation takes 6 x86 instructions.
 
 If a <code>smal_buffer*</code> can be found for a potential ptr, the ptr must also be within the <code>smal_buffer</code>'s
-[ <code>begin_ptr</code>, <code>alloc_ptr</code> ) region.
+[ <code>begin_ptr</code>, <code>alloc_ptr</code> ) region and must be aligned to <code>object_size</code>.
+This operations takes 8 x86 instructions.
 
 == Object Mark Bits ==
 
 Each <code>smal_buffer</code> maintains a mark bitmap for each object parceled from it.
-The mark bitmap is transient; it's allocated and freed on demand during <code>smal_collect()</code>.
+The mark bitmap is transient; it is <code>malloc()</code>ed and <code>free()</code>ed, on-demand, during <code>smal_collect()</code>.
 
 A pointer's mark bitmap index is computed by dividing the difference between the ptr and its <code>smal_buffer*</code> with
-the size of the objects (<code>element_size</code>) allocated from the <code>smal_buffer</code>.
+the size of the objects (<code>object_size</code>) allocated from the <code>smal_buffer</code>.
 
 == Object Marking Algorithms ==
 

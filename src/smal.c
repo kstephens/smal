@@ -14,8 +14,8 @@
  */
 
 #if 0
-#define smal_buffer_element_size(buf) 24
-#define smal_buffer_element_alignment(buf) smal_buffer_element_size(buf)
+#define smal_buffer_object_size(buf) 24
+#define smal_buffer_object_alignment(buf) smal_buffer_object_size(buf)
 #endif
 
 #define smal_buffer_size (4 * 4 * 1024)
@@ -33,12 +33,12 @@ size_t smal_buffer_mask = (4 * 4 * 1024) - 1;
 #endif
 
 
-#ifndef smal_buffer_element_size
-#define smal_buffer_element_size(buf) (buf)->element_size
+#ifndef smal_buffer_object_size
+#define smal_buffer_object_size(buf) (buf)->object_size
 #endif
 
-#ifndef smal_buffer_element_alignment
-#define smal_buffer_element_alignment(buf) (buf)->element_alignment
+#ifndef smal_buffer_object_alignment
+#define smal_buffer_object_alignment(buf) (buf)->object_alignment
 #endif
 
 /*********************************************************************
@@ -282,10 +282,10 @@ void smal_buffer_dealloc(smal_buffer *self)
   ( \
    /* (BUF)->buffer_id == smal_buffer_buffer_id(PTR) && */  \
    (BUF)->begin_ptr <= (PTR) && (PTR) < (BUF)->alloc_ptr && \
-   smal_alignedQ((PTR), smal_buffer_element_alignment(BUF)))
+   smal_alignedQ((PTR), smal_buffer_object_alignment(BUF)))
 
 #define smal_buffer_mark_offset(BUF, PTR) \
-  (((void*)(PTR) - (void*)(BUF)) / smal_buffer_element_size(BUF))
+  (((void*)(PTR) - (void*)(BUF)) / smal_buffer_object_size(BUF))
 
 #define smal_buffer_mark_i(BUF, PTR) \
   (smal_buffer_mark_offset(BUF, PTR) / smal_BITS_PER_WORD)
@@ -330,40 +330,40 @@ void smal_buffer_free_mark_bits(smal_buffer *self)
 }
 
 static
-void smal_buffer_set_element_size(smal_buffer *self, size_t element_size)
+void smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
 {
-  smal_debug(1, "%p: (%d)", self, (int) element_size);
+  smal_debug(1, "%p: (%d)", self, (int) object_size);
 
-  self->element_size = element_size;
-  /* handle hardcoded element_size. */
-  self->element_size = smal_buffer_element_size(self);
+  self->object_size = object_size;
+  /* handle hardcoded object_size. */
+  self->object_size = smal_buffer_object_size(self);
 
-  if ( ! self->element_alignment )
-    self->element_alignment = self->element_size;
-  /* handle hardcoded element_alignment. */
-  self->element_alignment = smal_buffer_element_alignment(self);
+  if ( ! self->object_alignment )
+    self->object_alignment = self->object_size;
+  /* handle hardcoded object_alignment. */
+  self->object_alignment = smal_buffer_object_alignment(self);
 
-  smal_ALIGN(self->begin_ptr, self->element_alignment);
+  smal_ALIGN(self->begin_ptr, self->object_alignment);
   self->alloc_ptr = self->begin_ptr;
 
   self->end_ptr = self->mmap_addr + self->mmap_size;
-  smal_ALIGN(self->end_ptr, self->element_alignment);
+  smal_ALIGN(self->end_ptr, self->object_alignment);
   if ( self->end_ptr > self->mmap_addr + self->mmap_size )
-    self->end_ptr -= self->element_size;
+    self->end_ptr -= self->object_size;
 
-  self->element_capacity = (self->end_ptr - self->begin_ptr) / self->element_size;
+  self->object_capacity = (self->end_ptr - self->begin_ptr) / self->object_size;
 
-  self->mark_bits_size = (self->mmap_size / self->element_size / smal_BITS_PER_WORD) + 1;
+  self->mark_bits_size = (self->mmap_size / self->object_size / smal_BITS_PER_WORD) + 1;
   self->mark_bits_n = 0;
 
-  buffer_head.avail_n += self->avail_n = self->element_capacity;
+  buffer_head.avail_n += self->avail_n = self->object_capacity;
 
-  smal_debug(2, "  element_size = %d, element_alignment = %d",
-	    (int) self->element_size, (int) self->element_alignment);
+  smal_debug(2, "  object_size = %d, object_alignment = %d",
+	    (int) self->object_size, (int) self->object_alignment);
 
-  smal_debug(2, "  begin_ptr = %p, end_ptr = %p, element_capacity = %lu, mark_bits_size = %lu", 
+  smal_debug(2, "  begin_ptr = %p, end_ptr = %p, object_capacity = %lu, mark_bits_size = %lu", 
 	    (void*) self->begin_ptr, (void*) self->end_ptr, 
-	    (unsigned long) self->element_capacity,
+	    (unsigned long) self->object_capacity,
 	    (unsigned long) self->mark_bits_size);
 }
 
@@ -387,7 +387,7 @@ void smal_mark_ptr(void *ptr)
   }
 }
 
-void *smal_buffer_alloc_element(smal_buffer *self)
+void *smal_buffer_alloc_object(smal_buffer *self)
 {
   void *ptr;
 
@@ -399,7 +399,7 @@ void *smal_buffer_alloc_element(smal_buffer *self)
     -- buffer_head.free_list_n;
   } else if ( self->alloc_ptr < self->end_ptr ){
     ptr = self->alloc_ptr;
-    self->alloc_ptr += smal_buffer_element_size(self);
+    self->alloc_ptr += smal_buffer_object_size(self);
     ++ self->alloc_n;
     ++ buffer_head.alloc_n;
   } else {
@@ -428,7 +428,7 @@ void *smal_buffer_alloc_element(smal_buffer *self)
 
 
 static
-void smal_buffer_free_element(smal_buffer *self, void *ptr)
+void smal_buffer_free_object(smal_buffer *self, void *ptr)
 {
   self->type->free_func(ptr);
   * ((void**) ptr) = self->free_list;
@@ -454,11 +454,11 @@ void smal_buffer_sweep(smal_buffer *self)
   smal_debug(4, "  mark_bits_n = %d", self->mark_bits_n);
   if ( self->mark_bits_n ) {
     void *ptr;
-    for ( ptr = self->begin_ptr; ptr < self->alloc_ptr; ptr += smal_buffer_element_size(self) ) {
+    for ( ptr = self->begin_ptr; ptr < self->alloc_ptr; ptr += smal_buffer_object_size(self) ) {
       if ( smal_buffer_markQ(self, ptr) ) {
 	++ self->live_n;
       } else {
-	smal_buffer_free_element(self, ptr);
+	smal_buffer_free_object(self, ptr);
       }
     }
     smal_debug(4, "  live_n = %d, free_list_n = %d",
@@ -467,12 +467,12 @@ void smal_buffer_sweep(smal_buffer *self)
     smal_buffer_free_mark_bits(self);
     buffer_head.live_n += self->live_n;
   } else {
-    /* All elements in this buffer are free. */
+    /* All objects in this buffer are free. */
     assert(! self->live_n);
     /* Call free_func, if necessary. */
     if ( self->type->free_func != null_func ) {
       void *ptr;
-      for ( ptr = self->begin_ptr; ptr < self->alloc_ptr; ptr += smal_buffer_element_size(self) ) {
+      for ( ptr = self->begin_ptr; ptr < self->alloc_ptr; ptr += smal_buffer_object_size(self) ) {
 	self->type->free_func(ptr);
       }
     }
@@ -547,7 +547,7 @@ void smal_init()
 /**********************************************/
 
 
-smal_type *smal_type_for(size_t element_size, smal_mark_func mark_func, smal_free_func free_func)
+smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free_func free_func)
 {
   smal_type *type;
   
@@ -556,10 +556,10 @@ smal_type *smal_type_for(size_t element_size, smal_mark_func mark_func, smal_fre
   }
 
   /* must be big enough for free list next pointer. */
-  if ( element_size < sizeof(void*) )
-    element_size = sizeof(void*);
+  if ( object_size < sizeof(void*) )
+    object_size = sizeof(void*);
   /* Align size to at least sizeof(double) */
-  smal_ALIGN(element_size, sizeof(double));
+  smal_ALIGN(object_size, sizeof(double));
 
   if ( ! mark_func )
     mark_func = null_func;
@@ -567,7 +567,7 @@ smal_type *smal_type_for(size_t element_size, smal_mark_func mark_func, smal_fre
     free_func = null_func;
 
   smal_DLLIST_each(&type_head, type) {
-    if ( type->element_size == element_size && 
+    if ( type->object_size == object_size && 
 	 type->mark_func == mark_func &&
 	 type->free_func == free_func ) {
       return type;
@@ -577,7 +577,7 @@ smal_type *smal_type_for(size_t element_size, smal_mark_func mark_func, smal_fre
   type = malloc(sizeof(*type));
   memset(type, 0, sizeof(*type));
   type->type_id = ++ type_head.type_id;
-  type->element_size = element_size;
+  type->object_size = object_size;
   type->mark_func = mark_func;
   type->free_func = free_func;
   smal_DLLIST_INSERT(&type_head, type);
@@ -590,9 +590,9 @@ static
 smal_buffer *smal_type_find_alloc_buffer(smal_type *self)
 {
   smal_buffer *buf;
-  /* TODO: Find the smal_buffer that has the least free elements available. */
+  /* TODO: Find the smal_buffer that has the least free objects available. */
   smal_DLLIST_each(&buffer_head, buf) {
-    if ( buf->type == self && (buf->free_list || buf->live_n != buf->element_capacity) )
+    if ( buf->type == self && (buf->free_list || buf->live_n != buf->object_capacity) )
       return buf;
   } smal_DLLIST_each_END();
   return 0;
@@ -607,7 +607,7 @@ smal_buffer *smal_type_alloc_buffer(smal_type *self)
     if ( ! (self->alloc_buffer = smal_type_find_alloc_buffer(self)) ) {
       if ( (self->alloc_buffer = smal_buffer_alloc()) ) {
 	self->alloc_buffer->type = self;
-	smal_buffer_set_element_size(self->alloc_buffer, self->element_size);
+	smal_buffer_set_object_size(self->alloc_buffer, self->object_size);
       } else {
 	return 0; /* OOM */
       }
@@ -623,10 +623,10 @@ void *smal_type_alloc(smal_type *self)
   if ( ! smal_type_alloc_buffer(self) )
     return 0;
 
-  if ( ! (ptr = smal_buffer_alloc_element(self->alloc_buffer)) ) {
+  if ( ! (ptr = smal_buffer_alloc_object(self->alloc_buffer)) ) {
     if ( ! smal_type_alloc_buffer(self) )
       return 0;
-    ptr = smal_buffer_alloc_element(self->alloc_buffer);
+    ptr = smal_buffer_alloc_object(self->alloc_buffer);
   }
 
   return ptr;
@@ -640,7 +640,7 @@ void smal_type_free(void *ptr)
     if ( smal_buffer_ptr_is_validQ(buf, ptr) ) {
       assert(buf->buffer_id == smal_buffer_buffer_id(buf));
       smal_debug(6, "ptr %p is valid in buf %p", ptr, buf);
-      smal_buffer_free_element(buf, ptr);
+      smal_buffer_free_object(buf, ptr);
     }
   }
 }

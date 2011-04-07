@@ -27,7 +27,7 @@ typedef struct smal_buffer smal_buffer;
 struct smal_type {
   smal_type *next, *prev; /* global list of all smal_types. */
   size_t type_id;
-  size_t element_size;
+  size_t object_size;
   smal_mark_func mark_func;
   smal_free_func free_func;
   smal_buffer *alloc_buffer;
@@ -39,34 +39,34 @@ struct smal_buffer {
   size_t buffer_id;
   smal_type *type;
 
-  size_t element_size;
-  size_t element_alignment;
-  size_t element_capacity; /* number of elements that can be allocated from this buffer. */
+  size_t object_size;
+  size_t object_alignment;
+  size_t object_capacity; /* number of objects that can be allocated from this buffer. */
 
   void *mmap_addr;
   size_t mmap_size;
 
-  void *begin_ptr; /* start of element allocations. */
+  void *begin_ptr; /* start of object allocations. */
   void *end_ptr; /* alloc_ptr guard. */
 
-  void *alloc_ptr; /* next location to allocate an element. */
-  size_t alloc_n; /* number of elements allocated. */
+  void *alloc_ptr; /* next location to allocate an object. */
+  size_t alloc_n; /* number of objects allocated. */
 
-  size_t avail_n; /* number of elements either unallocated or on free_list. */
+  size_t avail_n; /* number of objects either unallocated or on free_list. */
 
-  size_t live_n; /* number of elements known to be live. */
+  size_t live_n; /* number of objects known to be live. */
 
   unsigned int *mark_bits;
   int mark_bits_n; /* number of marked bits. */
-  size_t mark_bits_size; /* number of elements in mark_bits. */
+  size_t mark_bits_size; /* number of objects in mark_bits. */
 
   void *free_list;
-  int free_list_n; /* number of elements on free_list. */
+  int free_list_n; /* number of objects on free_list. */
 };
 
 extern int smal_debug_level;
 
-smal_type *smal_type_for(size_t element_size, smal_mark_func mark_func, smal_free_func free_func);
+smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free_func free_func);
 void *smal_type_alloc(smal_type *type);
 void smal_type_free(void *ptr);
 void smal_mark_ptr(void *ptr); /* user can call this method. */
