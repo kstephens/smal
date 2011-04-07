@@ -28,6 +28,10 @@ Unused objects that are returned to the <code>smal_buffer</code> are kept on its
 
 Since SMAL does not compact or relocate objects during collection, it attempts to allocate from <code>smal_buffer</code> with the least amount of available objects (either unparceled or on the free list).  '''''THIS IS NOT IMPLEMENTED YET'''''.
 
+== Collection Scheduling ==
+
+SAML has no default collection scheduling algorithm.  Users must decide on when to call <code>smal_collect()</code>.
+
 == Memory Alignment ==
 
 === Benefits ===

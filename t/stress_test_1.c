@@ -22,8 +22,7 @@ void smal_mark_roots()
   smal_roots_mark_chain(0);
 }
 
-static
-void count_object(smal_type *type, void *ptr, void *arg)
+void my_count_object(smal_type *type, void *ptr, void *arg)
 {
   //  fprintf(stderr, "  type %p obj %p\n", type, ptr);
   (* (int *) arg) ++; 
@@ -64,14 +63,17 @@ int main(int argc, char **argv)
     fprintf(stderr, "%d", action);
     fflush(stderr);
     
-    if ( alloc_id % 100 == 0 ) {
+#if 1
+    if ( alloc_id % 10 == 0 ) {
+      fprintf(stderr, "\nGC\n");
       smal_collect();
     }
+#endif
     
-#if 1
-    if ( alloc_id % 100 == 50 ) {
+#if 0
+    if ( alloc_id % 10 == 50 ) {
       int obj_count = 0;
-      smal_each_object(count_object, &obj_count);
+      smal_each_object(my_count_object, &obj_count);
       fprintf(stderr, "  object_count = %d\n", obj_count);
     }
 #endif

@@ -21,6 +21,8 @@ typedef void (*smal_free_func)(void *ptr);
 
 struct smal_type;
 typedef struct smal_type smal_type;
+struct smal_bitmap;
+typedef struct smal_bitmap smal_bitmap;
 struct smal_buffer;
 typedef struct smal_buffer smal_buffer;
 
@@ -31,6 +33,14 @@ struct smal_type {
   smal_mark_func mark_func;
   smal_free_func free_func;
   smal_buffer *alloc_buffer;
+};
+
+struct smal_bitmap {
+  size_t size;
+  unsigned int *bits;
+  size_t bits_size;
+  int set_n;
+  int clr_n;
 };
 
 struct smal_buffer {
@@ -56,12 +66,11 @@ struct smal_buffer {
 
   size_t live_n; /* number of objects known to be live. */
 
-  unsigned int *mark_bits;
-  int mark_bits_n; /* number of marked bits. */
-  size_t mark_bits_size; /* number of objects in mark_bits. */
+  smal_bitmap mark_bits;
 
   void *free_list;
   int free_list_n; /* number of objects on free_list. */
+  smal_bitmap free_bits;
 };
 
 extern int smal_debug_level;

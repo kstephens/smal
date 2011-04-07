@@ -42,6 +42,58 @@ size_t smal_buffer_mask = (4 * 4 * 1024) - 1;
 #endif
 
 /*********************************************************************
+ * bitmaps
+ */
+
+#define smal_BITS_PER_WORD (sizeof(unsigned int) * 8)
+
+static
+void smal_bitmap_clr_all(smal_bitmap *self)
+{
+  memset(self->bits, 0, self->bits_size);
+  self->set_n = 0;
+  self->clr_n = self->size;
+}
+
+#if 0
+static
+void smal_bitmap_set_all(smal_bitmap *self)
+{
+  memset(self->bits, ~0, self->bits_size);
+  self->clr_n = 0;
+  self->set_n = self->size;
+}
+#endif
+
+static
+void smal_bitmap_init(smal_bitmap *self)
+{
+  self->bits_size = sizeof(self->bits[0]) * ((self->size / smal_BITS_PER_WORD) + 1);
+  self->bits = malloc(self->bits_size);
+  self->set_n = self->clr_n = 0;
+  smal_bitmap_clr_all(self);
+}
+
+static
+void smal_bitmap_free(smal_bitmap *self)
+{
+  if ( self->bits ) {
+    free(self->bits);
+    self->bits = 0;
+  }
+}
+
+
+#define smal_bitmap_i(bm, i) ((i) / smal_BITS_PER_WORD)
+#define smal_bitmap_w(bm, i) (bm)->bits[smal_bitmap_i(bm, i)]
+#define smal_bitmap_b(bm, i) (1 << ((i) % smal_BITS_PER_WORD))
+#define smal_bitmap_setQ(bm, i) (smal_bitmap_w(bm, i) & smal_bitmap_b(bm, i))
+#define smal_bitmap_set(bm, i) (smal_bitmap_w(bm, i) |= smal_bitmap_b(bm, i))
+#define smal_bitmap_set_c(bm, i) smal_bitmap_set(bm, i); (bm)->set_n ++; (bm)->clr_n --; 
+#define smal_bitmap_clr(bm, i) (smal_bitmap_w(bm, i) &= ~ smal_bitmap_b(bm, i))
+#define smal_bitmap_clr_c(bm, i) smal_bitmap_clr(bm, i); (bm)->set_n --; (bm)->clr_n ++;
+
+/*********************************************************************
  * Debugging support.
  */
 
@@ -270,7 +322,9 @@ void smal_buffer_dealloc(smal_buffer *self)
   if ( self->type && self->type->alloc_buffer )
     self->type->alloc_buffer = 0;
 
-  if ( self->mark_bits ) free(self->mark_bits);
+  smal_bitmap_free(&self->free_bits);
+  smal_bitmap_free(&self->mark_bits);
+
   smal_buffer_table_remove(self);
 
   assert(buffer_head.alloc_n >= self->alloc_n);
@@ -284,66 +338,34 @@ void smal_buffer_dealloc(smal_buffer *self)
   smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) addr, (unsigned long) size, (int) result);
 }
 
+/************************************************************************************
+ * bitmaps
+ */
+
+#define smal_buffer_i(BUF, PTR) \
+  (((void*)(PTR) - (void*)(BUF)) / smal_buffer_object_size(BUF))
 
 /************************************************************************************
  * Mark bits
  */
 
-#define smal_BITS_PER_WORD (sizeof(unsigned int) * 8)
-
-#define smal_buffer_mark_offset(BUF, PTR) \
-  (((void*)(PTR) - (void*)(BUF)) / smal_buffer_object_size(BUF))
-
-#define smal_buffer_mark_i(BUF, PTR) \
-  (smal_buffer_mark_offset(BUF, PTR) / smal_BITS_PER_WORD)
-
-#define smal_buffer_mark_b(BUF, PTR) \
-  (1 << (smal_buffer_mark_offset(BUF, PTR) % smal_BITS_PER_WORD))
-
-#define smal_buffer_mark_word(BUF, PTR) \
-  ((BUF)->mark_bits[smal_buffer_mark_i(BUF, PTR)])
-
 #define smal_buffer_markQ(BUF, PTR) \
-  (smal_buffer_mark_word(BUF, PTR) & smal_buffer_mark_b(BUF, PTR))
+  smal_bitmap_setQ(&(BUF)->mark_bits, smal_buffer_i(BUF, PTR))
 
-#define smal_buffer_mark(BUF, PTR)					\
-  do {									\
-    smal_buffer_mark_word(BUF, PTR) |= smal_buffer_mark_b(BUF, PTR); \
-    ++ (BUF)->mark_bits_n;						\
-  } while (0);
-
-#define smal_buffer_mark_clear(BUF, PTR) \
-  smal_buffer_mark_word(BUF, PTR) &= ~ smal_buffer_mark_b(BUF, PTR)
+#define smal_buffer_mark(BUF, PTR)				\
+  smal_bitmap_set_c(&(BUF)->mark_bits, smal_buffer_i(BUF, PTR))
 
 
 static
 void smal_buffer_clear_mark_bits(smal_buffer *self)
 {
-  if ( ! self->mark_bits ) {
-    self->mark_bits = malloc(sizeof(self->mark_bits[0]) * self->mark_bits_size);
-  }
-  memset(self->mark_bits, 0, sizeof(self->mark_bits[0]) * self->mark_bits_size);
-  self->mark_bits_n = 0;
-}
-
-static
-void smal_buffer_set_mark_bits(smal_buffer *self)
-{
-  if ( ! self->mark_bits ) {
-    self->mark_bits = malloc(sizeof(self->mark_bits[0]) * self->mark_bits_size);
-  }
-  memset(self->mark_bits, ~0, sizeof(self->mark_bits[0]) * self->mark_bits_size);
-  self->mark_bits_n = self->alloc_n;
+  smal_bitmap_init(&self->mark_bits);
 }
 
 static
 void smal_buffer_free_mark_bits(smal_buffer *self)
 {
-  if ( self->mark_bits ) {
-    free(self->mark_bits);
-    self->mark_bits = 0;
-  }
-  self->mark_bits_n = 0;
+  smal_bitmap_free(&self->mark_bits);
 }
 
 static
@@ -370,18 +392,20 @@ void smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
 
   self->object_capacity = (self->end_ptr - self->begin_ptr) / self->object_size;
 
-  self->mark_bits_size = (self->mmap_size / self->object_size / smal_BITS_PER_WORD) + 1;
-  self->mark_bits_n = 0;
+  self->mark_bits.size = self->object_capacity;
+
+  self->free_bits.size = self->object_capacity;
+  smal_bitmap_init(&self->free_bits);
 
   buffer_head.avail_n += self->avail_n = self->object_capacity;
 
   smal_debug(2, "  object_size = %d, object_alignment = %d",
 	    (int) self->object_size, (int) self->object_alignment);
 
-  smal_debug(2, "  begin_ptr = %p, end_ptr = %p, object_capacity = %lu, mark_bits_size = %lu", 
+  smal_debug(2, "  begin_ptr = %p, end_ptr = %p, object_capacity = %lu, mark_bits.size = %lu", 
 	    (void*) self->begin_ptr, (void*) self->end_ptr, 
 	    (unsigned long) self->object_capacity,
-	    (unsigned long) self->mark_bits_size);
+	    (unsigned long) self->mark_bits.size);
 }
 
 
@@ -427,7 +451,7 @@ void smal_buffer_check_free_list(smal_buffer *self)
 {
   void *p;
   int i = 0;
-  fprintf(stderr, "free_list [%d] = { ", (int) self->free_list_n);
+  fprintf(stderr, "%p free_list [%d] = { ", (void*) self, (int) self->free_list_n);
   for ( p = self->free_list; p; p = *((void**) p) ) {
     fprintf(stderr, "%p, ", p);
     assert(++ i <= self->free_list_n);
@@ -445,6 +469,7 @@ void *smal_buffer_alloc_object(smal_buffer *self)
     -- self->free_list_n;
     assert(buffer_head.free_list_n > 0);
     -- buffer_head.free_list_n;
+    smal_bitmap_clr_c(&self->free_bits, smal_buffer_i(self, ptr));
   } else if ( self->alloc_ptr < self->end_ptr ){
     ptr = self->alloc_ptr;
     self->alloc_ptr += smal_buffer_object_size(self);
@@ -480,6 +505,7 @@ void *smal_buffer_alloc_object(smal_buffer *self)
 static
 void smal_buffer_free_object(smal_buffer *self, void *ptr)
 {
+  smal_bitmap_set_c(&self->free_bits, smal_buffer_i(self, ptr));
   self->type->free_func(ptr);
   * ((void**) ptr) = self->free_list;
   self->free_list = ptr;
@@ -502,19 +528,21 @@ void smal_buffer_free_object(smal_buffer *self, void *ptr)
 void smal_buffer_sweep(smal_buffer *self)
 {
   smal_debug(3, "(%p)", self);
-  smal_debug(4, "  mark_bits_n = %d", self->mark_bits_n);
-  if ( self->mark_bits_n ) {
+  smal_debug(4, "  mark_bits.set_n = %d", self->mark_bits.set_n);
+  if ( self->mark_bits.set_n ) {
     void *ptr;
     for ( ptr = self->begin_ptr; ptr < self->alloc_ptr; ptr += smal_buffer_object_size(self) ) {
       if ( smal_buffer_markQ(self, ptr) ) {
 	++ self->live_n;
       } else {
-	smal_buffer_free_object(self, ptr);
+	if ( ! smal_bitmap_setQ(&self->free_bits, smal_buffer_i(self, ptr)) ) {
+	  smal_buffer_free_object(self, ptr);
+	}
       }
     }
     smal_debug(4, "  live_n = %d, free_list_n = %d",
 	      self->live_n, self->free_list_n);
-    assert(self->mark_bits_n == self->live_n);
+    assert(self->mark_bits.set_n == self->live_n);
     smal_buffer_free_mark_bits(self);
     buffer_head.live_n += self->live_n;
   } else {
@@ -705,28 +733,15 @@ void smal_each_object(void (*func)(smal_type *type, void *ptr, void *arg), void 
   if ( in_gc )
     return;
 
-  /* 
-     For each smal_buffer:
-       Allocate a filled mark bitmap.
-       For each object in free_list,
-         Unmark bitmap.
-       Iterate from begin_ptr to alloc_ptr where mark is set.
-       Free mark bitmap.
-   */
   ++ no_gc;
 
   smal_DLLIST_each(&buffer_head, buf) {
-    smal_buffer_set_mark_bits(buf);
     void *ptr;
-    for ( ptr = buf->free_list; ptr; ptr = *((void**) ptr) ) {
-      smal_buffer_mark_clear(buf, ptr);
-    }
     for ( ptr = buf->begin_ptr; ptr < buf->alloc_ptr; ptr += smal_buffer_object_size(buf) ) {
-      if ( smal_buffer_markQ(buf, ptr) ) {
+      if ( ! smal_bitmap_setQ(&buf->free_bits, smal_buffer_i(buf, ptr)) ) {
 	func(buf->type, ptr, arg);
       }
     }
-    smal_buffer_free_mark_bits(buf);
   } smal_DLLIST_each_END();
 
   -- no_gc;
