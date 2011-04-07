@@ -117,7 +117,7 @@ SMAL probably cannot co-exist with allocators that use <code>sbrk()</code>.
 == Roots ==
 
 The user must provide a <code>smal_mark_roots()</code> function.
-This allows the user to configure support for different configurations:
+This allows the user to configure and optimize for different environments:
 * single-threaded vs. multi-threaded
 * conservative vs. type-safe 
 However, SMAL provides a simple, <code>smal_roots</code> package to explicitly declare root pointers on the C stack or in global variables.
