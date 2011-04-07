@@ -145,11 +145,15 @@ void smal_buffer_table_add(smal_buffer *self)
   size_t i;
   size_t buffer_table_size_new;
   smal_buffer **buffer_table_new;
-
-  if ( buffer_id_min > self->buffer_id )
-    buffer_id_min = self->buffer_id;
-  if ( buffer_id_max < self->buffer_id )
-    buffer_id_max = self->buffer_id;
+  
+  if ( buffer_id_min == 0 && buffer_id_max == 0 ) {
+    buffer_id_min = buffer_id_max = self->buffer_id;
+  } else {
+    if ( buffer_id_min > self->buffer_id )
+      buffer_id_min = self->buffer_id;
+    if ( buffer_id_max < self->buffer_id )
+      buffer_id_max = self->buffer_id;
+  }
 
   buffer_table_size_new = buffer_id_max - buffer_id_min + 1;
   buffer_table_new = malloc(sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1));
@@ -172,6 +176,8 @@ void smal_buffer_table_add(smal_buffer *self)
   buffer_table[i] = self;
 
   smal_DLLIST_INSERT(&buffer_head, self);
+
+  smal_debug(3, "buffer_table_size = %d", (int) buffer_table_size);
 }
 
 static
@@ -262,7 +268,7 @@ void smal_buffer_dealloc(smal_buffer *self)
   buffer_head.free_list_n -= self->free_list_n;
 
   result = munmap(addr, size);
-  smal_debug(2, " munmap(%p,%lu) = %d", (void*) addr, (unsigned long) size, (int) result);
+  smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) addr, (unsigned long) size, (int) result);
 }
 
 
