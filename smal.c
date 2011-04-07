@@ -205,7 +205,7 @@ smal_buffer *smal_buffer_alloc()
   int result;
   
   addr = mmap((void*) 0, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, (off_t) 0);
-  smal_debug(1, " mmap(..., %lu) = %p", (unsigned long) size, (void*) addr);
+  smal_debug(1, " mmap(..., 0x%lx) = %p", (unsigned long) size, (void*) addr);
 
   if ( addr == MAP_FAILED ) {
     smal_debug(2, "mmap failed: %s", strerror(errno));
@@ -247,6 +247,8 @@ smal_buffer *smal_buffer_alloc()
 
   smal_buffer_table_add(self);
 
+  smal_debug(2, " = %p", (void*) self);
+
   return self;
 }
 
@@ -282,7 +284,10 @@ void smal_buffer_dealloc(smal_buffer *self)
   buffer_table[smal_buffer_buffer_id(PTR) % buffer_table_size]
 
 #define smal_buffer_ptr_is_validQ(BUF, PTR) \
-  ((BUF)->buffer_id == smal_buffer_buffer_id(PTR) && (BUF)->begin_ptr <= (PTR) && (PTR) < (BUF)->alloc_ptr && smal_alignedQ((PTR), smal_buffer_element_alignment(BUF)))
+  ( \
+   /* (BUF)->buffer_id == smal_buffer_buffer_id(PTR) && */  \
+   (BUF)->begin_ptr <= (PTR) && (PTR) < (BUF)->alloc_ptr && \
+   smal_alignedQ((PTR), smal_buffer_element_alignment(BUF)))
 
 #define smal_buffer_mark_offset(BUF, PTR) \
   (((void*)(PTR) - (void*)(BUF)) / smal_buffer_element_size(BUF))
@@ -372,6 +377,7 @@ void smal_mark_ptr(void *ptr)
   if ( (buf = smal_ptr_to_buffer(ptr)) ) {
     smal_debug(5, "ptr %p => buf %p", ptr, buf);
     if ( smal_buffer_ptr_is_validQ(buf, ptr) ) {
+      assert(buf->buffer_id == smal_buffer_buffer_id(buf));
       smal_debug(6, "ptr %p is valid in buf %p", ptr, buf);
       smal_debug(7, "smal_buffer_mark_word(%p, %p) = 0x%08x", buf, ptr,
 		(unsigned int) smal_buffer_mark_word(buf, ptr));
