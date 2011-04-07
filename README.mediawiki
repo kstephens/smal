@@ -76,7 +76,7 @@ The algorithms/data structures are as follows:
 # Determine the mark bitmap offset.
 # If object is not already marked, 
 # mark the object in the bitmap and
-# call the smal_type's mark function.
+# call the <code>smal_type</code>'s <code>mark_func</code> function.
 
 === Sweep ===
 
