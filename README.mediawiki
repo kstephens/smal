@@ -36,10 +36,6 @@ The alignment restrictions of <code>smal_buffers</code> ensures very minimal <co
 It also allows for very fast pointer to <code>smal_buffer</code> mapping, making SMAL
 suitable for conservative and non-conservative collection.
 
-=== Issues ===
-
-SMAL cannot service allocations larger than <code>smal_buffer_size - sizeof(smal_buffer)</code>.
-
 === Characteristics ===
 
 Every potential pointer maps to a unique <code>buffer_id</code>, computed
@@ -51,8 +47,6 @@ it's trivial to map a potential object pointer to a potential <code>smal_buffer*
 A perfect hash table that maps <code>buffer_id</code>s to <code>smal_buffer*</code> is maintained.
 A lack of an entry in this table, means that any potential
 pointer mapping within the aligned <code>smal_buffer_size</code> region is not an object pointer allocated from a <code>smal_buffer</code>.
-This perfect hash table may be large if <code>mmap()</code> tends to not allocate <code>smal_buffer</code>s in a mostly-contigious fashion --
-other active allocators (e.g.: <code>malloc()</code>) may cause holes in the address space consumed by SMAL.
 
 Because the table is guaranteed to be perfect and non-colliding, mapping an arbitrary pointer to a 
 <code>smal_buffer</code> can be done in <code>O(1)</code> time, using a divide (or shift), a modulo and a vector index.
@@ -61,6 +55,13 @@ This operation takes 6 x86 instructions.
 If a <code>smal_buffer*</code> can be found for a potential pointer, the pointer must also be within the <code>smal_buffer</code>'s region between
 <code>begin_ptr</code> and <code>alloc_ptr</code> ) and must be aligned to <code>object_size</code>.
 This operations takes 8 x86 instructions.
+
+=== Issues ===
+
+* SMAL cannot service allocations larger than <code>smal_buffer_size - sizeof(smal_buffer)</code>.
+* The <code>buffer_id</code> hash table may become large and sparse when <code>mmap()</code> tends to not allocate 
+<code>smal_buffer</code>s in a mostly-contigious fashion --
+other active allocators (e.g.: <code>malloc()</code>) may cause holes in the address space consumed by SMAL.
 
 == Object Mark Bits ==
 
