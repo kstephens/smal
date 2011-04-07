@@ -118,10 +118,13 @@ SMAL supports a tiny <code>smal_thread</code> abstraction around <code>pthreads<
 The <code>smal_roots</code> package is thread-aware and thread-safe.  
 The rest of the SMAL allocator is not yet thread-safe.
 
+== Object Enumeration ==
+
+SMAL supports global object enumeration (i.e. Ruby ObjectSpace.each_object).
+
 == TODO ==
 
 * Support for weak references.
 * Support for finalization.
 * Full-thread safety.
-
 
