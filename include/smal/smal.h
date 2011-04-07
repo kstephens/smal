@@ -1,48 +1,35 @@
-#ifndef SMAL_H
-#define SMAL_H
+#ifndef SMAL_SMAL_H
+#define SMAL_SMAL_H
 
-/********************************************************************* 
-SMAL: A Simple, barebones Mark-sweep ALlocator.
 
-sgc_type represents a user-data type of a fixed size, mark and free callbacks.
-
-sgc_buffer represents a mmap() region of sgc_buffer_size aligned to sgc_buffer_size.
-sgc_buffer is at the head of the mmap() region.
-
-Objects are parcelled on-demand by incrementing alloc_ptr, starting at begin_ptr.
-Objects that are returned to the sgc_buffer are kept on its free_list.
-
-Each sgc_buffer maintains a mark bitmap for each object parcelled from it.
-The mark bitmap is transient; it's allocated and freed during sgc_collect.
-
-The alignment restrictions of sgc_buffers allows for very fast pointer->buffer
-mapping.
-*/
+/* SMAL: a [S]imple [M]ark-sweep [AL]locator
+   Copyright Kurt Stephens 2011.
+ */
 
 #include <stddef.h>
 
-typedef void (*sgc_mark_func)(void *ptr);
-typedef void (*sgc_free_func)(void *ptr);
+typedef void (*smal_mark_func)(void *ptr);
+typedef void (*smal_free_func)(void *ptr);
 
-struct sgc_type;
-typedef struct sgc_type sgc_type;
-struct sgc_buffer;
-typedef struct sgc_buffer sgc_buffer;
+struct smal_type;
+typedef struct smal_type smal_type;
+struct smal_buffer;
+typedef struct smal_buffer smal_buffer;
 
-struct sgc_type {
-  sgc_type *next, *prev; /* global list of all sgc_types. */
+struct smal_type {
+  smal_type *next, *prev; /* global list of all smal_types. */
   size_t type_id;
   size_t element_size;
-  sgc_mark_func mark_func;
-  sgc_free_func free_func;
-  sgc_buffer *alloc_buffer;
+  smal_mark_func mark_func;
+  smal_free_func free_func;
+  smal_buffer *alloc_buffer;
 };
 
-struct sgc_buffer {
-  sgc_buffer *next, *prev; /* global list of all sgc_buffers. */
+struct smal_buffer {
+  smal_buffer *next, *prev; /* global list of all smal_buffers. */
 
   size_t buffer_id;
-  sgc_type *type;
+  smal_type *type;
 
   size_t element_size;
   size_t element_alignment;
@@ -67,10 +54,12 @@ struct sgc_buffer {
   int free_list_n; /* number of elements on free_list. */
 };
 
-sgc_type *sgc_type_for(size_t element_size, sgc_mark_func mark_func, sgc_free_func free_func);
-void *sgc_type_alloc(sgc_type *type);
-void sgc_mark_ptr(void *ptr); /* user can call this method. */
-void sgc_mark_roots(); /* user must define this method. */
-void sgc_collect(); /* user can call this method. */
+extern int smal_debug_level;
+
+smal_type *smal_type_for(size_t element_size, smal_mark_func mark_func, smal_free_func free_func);
+void *smal_type_alloc(smal_type *type);
+void smal_mark_ptr(void *ptr); /* user can call this method. */
+void smal_mark_roots(); /* user must define this method. */
+void smal_collect(); /* user can call this method. */
 
 #endif

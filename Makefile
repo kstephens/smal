@@ -1,14 +1,21 @@
-CFLAGS = -O2 -g -Wall -Werror
 
-all : gc.s gc_unit_test
+INC_DIR=include/#
 
-gc.s : gc.c sgc.h
+CFLAGS = -O2 -g -Wall -Werror -I$(INC_DIR) #
+
+INCLUDES = $(INC_DIR)/smal/*.h #
+
+all : t/smal_test_1.t
+
+smal.s : smal.c $(INCLUDES)
 	$(CC) $(CFLAGS) -S -o $@ $<
 
-gc_unit_test : gc_unit_test.c gc.c sgc.h
-	$(CC) $(CFLAGS) -DGC_UNIT_TEST=1 -o $@ gc_unit_test.c gc.c
+t/smal_test_1.t : t/smal_test_1.c smal.c $(INCLUDES)
+	$(CC) $(CFLAGS) -DSMAL_UNIT_TEST=1 -o $@ $(@:.t=.c) smal.c
 
 clean :
-	rm -f gc.s gc_unit_test
+	rm -f smal.s t/*.t
 
-
+test : all t/*.t
+	set -ex; for t in t/*.t; do $$t; done
+ 
