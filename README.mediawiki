@@ -64,7 +64,10 @@ The mark bitmap is transient; it is <code>malloc()</code>ed and <code>free()</co
 A pointer's mark bitmap index is computed by dividing the difference between the pointer and its <code>smal_buffer*</code> with
 the size of the objects (<code>object_size</code>) allocated from the <code>smal_buffer</code>.
 
-== Object Marking Algorithms ==
+If a pointer is known to be allocated and aligned, <code>smal_makr_ptr_exact()</code> can test the mark bit in 25. x86 instructions,
+and mark the bit and recurse into the <code>mark_func</code> in another 6 x86 instructions.
+
+== Mark-Sweep ==
 
 The algorithms/data structures are as follows:
 

@@ -70,7 +70,9 @@ smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free
 void *smal_type_alloc(smal_type *type);
 void smal_type_free(void *ptr);
 void smal_mark_ptr(void *ptr); /* user can call this method. */
+void smal_mark_ptr_exact(void *ptr); /* assumes ptr is 0 or known to be properly allocated and aligned. */
 void smal_mark_roots(); /* user must define this method. */
 void smal_collect(); /* user can call this method. */
 
 #endif
+

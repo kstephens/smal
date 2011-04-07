@@ -126,6 +126,21 @@ void null_func(void *ptr)
  ** Maps buffer pages to actual smal_buffer addresses.
  */
 
+#define smal_ptr_to_buffer(PTR)					\
+  buffer_table[smal_buffer_buffer_id(PTR) % buffer_table_size]
+
+#define smal_buffer_ptr_is_in_rangeQ(BUF, PTR)			\
+  ((BUF)->begin_ptr <= (PTR) && (PTR) < (BUF)->alloc_ptr)
+
+#define smal_buffer_ptr_is_alignedQ(BUF, PTR)			\
+  smal_alignedQ((PTR), smal_buffer_object_alignment(BUF))
+
+#define smal_buffer_ptr_is_validQ(BUF, PTR) \
+  (					    \
+   smal_buffer_ptr_is_alignedQ(BUF, PTR) && \
+   smal_buffer_ptr_is_in_rangeQ(BUF, PTR)   \
+					    )
+
 static
 void smal_buffer_table_add(smal_buffer *self)
 {
@@ -275,15 +290,6 @@ void smal_buffer_dealloc(smal_buffer *self)
 
 #define smal_BITS_PER_WORD (sizeof(unsigned int) * 8)
 
-#define smal_ptr_to_buffer(PTR) \
-  buffer_table[smal_buffer_buffer_id(PTR) % buffer_table_size]
-
-#define smal_buffer_ptr_is_validQ(BUF, PTR) \
-  ( \
-   /* (BUF)->buffer_id == smal_buffer_buffer_id(PTR) && */  \
-   (BUF)->begin_ptr <= (PTR) && (PTR) < (BUF)->alloc_ptr && \
-   smal_alignedQ((PTR), smal_buffer_object_alignment(BUF)))
-
 #define smal_buffer_mark_offset(BUF, PTR) \
   (((void*)(PTR) - (void*)(BUF)) / smal_buffer_object_size(BUF))
 
@@ -383,6 +389,20 @@ void smal_mark_ptr(void *ptr)
 	smal_buffer_mark(buf, ptr);
 	buf->type->mark_func(ptr);
       }
+    }
+  }
+}
+
+void smal_mark_ptr_exact(void *ptr)
+{
+  smal_buffer *buf;
+  if ( ! ptr )
+    return;
+  buf = smal_ptr_to_buffer(ptr);
+  if ( smal_buffer_ptr_is_in_rangeQ(buf, ptr) ) {
+    if ( ! smal_buffer_markQ(buf, ptr) ) {
+      smal_buffer_mark(buf, ptr);
+      buf->type->mark_func(ptr);
     }
   }
 }
