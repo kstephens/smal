@@ -15,23 +15,25 @@ Each <code>smal_buffer</code> is at the head of an <code>mmap()</code> region.
 
 == Object Allocation ==
 
-Objects are parcelled, on-demand, from a <code>smal_buffer</code>, by incrementing <code>alloc_ptr</code> by a fixed object size, starting at <code>begin_ptr</code>
+Objects are parceled, on-demand, from a <code>smal_buffer</code>, by incrementing <code>alloc_ptr</code> by a fixed object size, starting at <code>begin_ptr</code>
 and terminating at <code>end_ptr</code>.
 Objects that are returned to the <code>smal_buffer</code> are kept on its <code>free_list</code>.
 
-== Alignment Benefits ==
+== Memory Alignment ==
+
+=== Benefits ===
 
 The alignment restrictions of <code>smal_buffers</code> ensures very minimal mmap()/OS-level fragmentation.
 It also allows for very fast pointer to <code>smal_buffer</code> mapping, making SMAL
 suitable for conservative and non-conservative collection.
 
-== Alignment Issues ==
+=== Issues ===
 
 SMAL cannot service allocations large than <code>smal_buffer_size - sizeof(smal_buffer)</code>.
 
-== Alignment Characteristics ==
+=== Characteristics ===
 
-Every potental <code>smal_buffer*</code> maps to a "buffer_id".  A <code>smal_buffer</code>'s <code>buffer_id</code> is computed
+Every potential <code>smal_buffer*</code> maps to a "buffer_id".  A <code>smal_buffer</code>'s <code>buffer_id</code> is computed
 by dividing the <code>smal_buffer</code> address by <code>smal_buffer_size</code>.
 
 Since the <code>smal_buffer</code> header always resides at the aligned to <code>smal_buffer_size</code>, 
@@ -49,17 +51,17 @@ If a <code>smal_buffer*</code> can be found for a potential ptr, the ptr must al
 
 == Object Mark Bits ==
 
-Each <code>smal_buffer</code> maintains a mark bitmap for each object parcelled from it.
+Each <code>smal_buffer</code> maintains a mark bitmap for each object parceled from it.
 The mark bitmap is transient; it's allocated and freed on demand during <code>smal_collect()</code>.
 
 A pointer's mark bitmap index is computed by dividing the difference between the ptr and its <code>smal_buffer*</code> with
 the size of the objects (<code>element_size</code>) allocated from the <code>smal_buffer</code>.
 
-== Object Marking Algoritm ==
+== Object Marking Algorithms ==
 
-The algorithm/data structures are as follows:
+The algorithms/data structures are as follows:
 
-To mark a (potential) object:
+=== Mark a (potential) object ===
 
 1) Map potential object ptr to a potential <code>smal_buffer*</code>.
 2) Determine if object ptr within <code>smal_buffer</code> region where object allocations took place.
@@ -67,6 +69,11 @@ To mark a (potential) object:
 4) Determine the mark bitmap offset.
 5) If object is not already marked, 
 5.1) mark the object and call the smal_type's mark function.
+
+=== Sweep ==
+
+1) For each <code>smal_buffer</code>
+2) MORE HERE.
 
 == Ecology ==
 
