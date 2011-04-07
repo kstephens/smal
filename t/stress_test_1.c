@@ -36,7 +36,7 @@ int main(int argc, char **argv)
   
   my_cons_type = smal_type_for(sizeof(my_cons), my_cons_mark, 0);
   
-  for ( alloc_id = 0; alloc_id < 1000000; ++ alloc_id ) {
+  for ( alloc_id = 0; alloc_id < 10000000; ++ alloc_id ) {
     int action = rand() % 10;
     x = smal_type_alloc(my_cons_type);
     x->car = x->cdr = 0;
@@ -60,25 +60,29 @@ int main(int argc, char **argv)
       break;
     }
 #endif
+#if 0
     fprintf(stderr, "%d", action);
     fflush(stderr);
-    
+#endif
+
 #if 1
-    if ( alloc_id % 100 == 0 ) {
+    if ( rand() % 10 == 0 ) {
       // fprintf(stderr, "\nGC\n");
       smal_collect();
     }
 #endif
     
 #if 1
-    if ( alloc_id % 100 == 50 ) {
+    if ( rand() % 10 == 1 ) {
       int obj_count = 0;
       smal_each_object(my_count_object, &obj_count);
-      fprintf(stderr, "  object_count = %d\n", obj_count);
+      // fprintf(stderr, "  object_count = %d\n", obj_count);
     }
 #endif
   }
 }
+x = y = 0;
+smal_collect();
 
 fprintf(stdout, "\nOK\n");
 
