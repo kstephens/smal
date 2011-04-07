@@ -65,6 +65,7 @@ This operations takes 8 x86 instructions.
 
 Each <code>smal_buffer</code> maintains a mark bitmap for each object parceled from it.
 The mark bitmap is transient; it is <code>malloc()</code>ed and <code>free()</code>ed, on-demand, during <code>smal_collect()</code>.
+Placing mark bits in a separate bitmap reduces memory overhead, esp. for <code>fork()</code>ed processes.
 
 A pointer's mark bitmap index is computed by dividing the difference between the pointer and its <code>smal_buffer*</code> with
 the size of the objects (<code>object_size</code>) allocated from the <code>smal_buffer</code>.
