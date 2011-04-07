@@ -70,12 +70,14 @@ void smal_bitmap_set_all(smal_bitmap *self)
 #endif
 
 static
-void smal_bitmap_init(smal_bitmap *self)
+int smal_bitmap_init(smal_bitmap *self)
 {
   self->bits_size = sizeof(self->bits[0]) * ((self->size / smal_BITS_PER_WORD) + 1);
-  self->bits = malloc(self->bits_size);
   self->set_n = self->clr_n = 0;
+  if ( ! (self->bits = malloc(self->bits_size)) )
+    return -1;
   smal_bitmap_clr_all(self);
+  return 0;
 }
 
 static
@@ -250,8 +252,11 @@ void smal_buffer_table_remove(smal_buffer *self)
 }
 
 
+static
+int smal_buffer_set_object_size(smal_buffer *self, size_t object_size);
+
 static 
-smal_buffer *smal_buffer_alloc()
+smal_buffer *smal_buffer_alloc(smal_type *type)
 {
   smal_buffer *self;
 
@@ -301,12 +306,18 @@ smal_buffer *smal_buffer_alloc()
   memset(self, 0, sizeof(*self));
 
   self->next = self->prev = 0;
+  self->type = type;
   self->buffer_id = smal_buffer_buffer_id(self);
   self->mmap_addr = keep_addr;
   self->mmap_size = keep_size;
   self->begin_ptr = self + 1;
 
-  smal_buffer_table_add(self);
+  if ( smal_buffer_set_object_size(self, type->object_size) < 0 ) {
+    munmap(self->mmap_addr, self->mmap_size);
+    self = 0;
+  } else {
+    smal_buffer_table_add(self);
+  }
 
   smal_debug(1, "() = %p", (void*) self);
 
@@ -378,8 +389,10 @@ void smal_buffer_free_mark_bits(smal_buffer *self)
 }
 
 static
-void smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
+int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
 {
+  int result = 0;
+
   smal_debug(1, "%p: (%d)", self, (int) object_size);
 
   self->object_size = object_size;
@@ -404,11 +417,22 @@ void smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
   self->object_capacity = (self->end_ptr - self->begin_ptr) / self->object_size;
 
   self->mark_bits.size = self->object_capacity;
+  if ( smal_bitmap_init(&self->mark_bits) < 0 ) {
+    result = -1;
+    goto done;
+  }
+
   self->free_bits.size = self->object_capacity;
-  smal_bitmap_init(&self->free_bits);
+  if ( smal_bitmap_init(&self->free_bits) < 0 ) {
+    result = -1;
+    goto done;
+  }
 
-  buffer_head.stats.avail_n += self->stats.avail_n = self->object_capacity;
+  self->stats.avail_n = self->object_capacity;
+  self->type->stats.avail_n += self->stats.avail_n;
+  buffer_head.stats.avail_n += self->stats.avail_n;
 
+ done:
   smal_debug(2, "  object_size = %d, object_alignment = %d",
 	    (int) self->object_size, (int) self->object_alignment);
 
@@ -416,6 +440,13 @@ void smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
 	    (void*) self->begin_ptr, (void*) self->end_ptr, 
 	    (unsigned long) self->object_capacity,
 	    (unsigned long) self->mark_bits.size);
+
+  if ( result < 0 ) {
+    smal_bitmap_init(&self->mark_bits);
+    smal_bitmap_init(&self->free_bits);
+  }
+
+  return result;
 }
 
 static inline
@@ -611,7 +642,7 @@ void smal_buffer_sweep(smal_buffer *self)
   }
 }
 
-
+static
 void smal_buffer_pre_mark(smal_buffer *self)
 {
   smal_buffer_clear_mark_bits(self);
@@ -723,13 +754,17 @@ smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free
 static
 smal_buffer *smal_type_find_alloc_buffer(smal_type *self)
 {
+  smal_buffer *most_used = 0;
   smal_buffer *buf;
+
   /* TODO: Find the smal_buffer that has the least free objects available. */
   smal_DLLIST_each(&buffer_head, buf) {
+    most_used = buf;
     if ( buf->type == self && 
 	 (buf->free_list || buf->stats.live_n != buf->object_capacity) )
       return buf;
   } smal_DLLIST_each_END();
+
   return 0;
 }
 
@@ -740,10 +775,8 @@ smal_buffer *smal_type_alloc_buffer(smal_type *self)
     assert(self->alloc_buffer->type == self);
   } else {
     if ( ! (self->alloc_buffer = smal_type_find_alloc_buffer(self)) ) {
-      if ( (self->alloc_buffer = smal_buffer_alloc()) ) {
-	self->alloc_buffer->type = self;
-	smal_buffer_set_object_size(self->alloc_buffer, self->object_size);
-	self->stats.avail_n += self->alloc_buffer->stats.avail_n;
+      self->alloc_buffer = smal_buffer_alloc(self);
+      if ( (self->alloc_buffer = smal_buffer_alloc(self)) ) {
       } else {
 	return 0; /* OOM */
       }
