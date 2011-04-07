@@ -11,7 +11,7 @@ smal.s : smal.c $(INCLUDES)
 	$(CC) $(CFLAGS) -S -o $@ $<
 
 t/smal_test_1.t : t/smal_test_1.c smal.c $(INCLUDES)
-	$(CC) $(CFLAGS) -DSMAL_UNIT_TEST=1 -o $@ $(@:.t=.c) smal.c
+	$(CC) $(CFLAGS) -DSMAL_UNIT_TEST=1 -DSMAL_DEBUG=1 -o $@ $(@:.t=.c) smal.c
 
 clean :
 	rm -rf *.s *.dSYM *.o *.a t/*.t t/*.dSYM
