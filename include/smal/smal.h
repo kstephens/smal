@@ -60,6 +60,7 @@ extern int smal_debug_level;
 
 smal_type *smal_type_for(size_t element_size, smal_mark_func mark_func, smal_free_func free_func);
 void *smal_type_alloc(smal_type *type);
+void smal_type_free(void *ptr);
 void smal_mark_ptr(void *ptr); /* user can call this method. */
 void smal_mark_roots(); /* user must define this method. */
 void smal_collect(); /* user can call this method. */

@@ -63,3 +63,7 @@ To mark a (potential) object:
 5) If object is not already marked, 
 5.1) mark the object and call the smal_type's mark function.
 
+= Ecology
+
+SMAL relies on malloc()/free().
+

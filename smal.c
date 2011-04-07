@@ -52,8 +52,13 @@
  * Debugging support.
  */
 
+#ifndef SMAL_DEBUG
+#define SMAL_DEBUG 0
+#endif
+
 int smal_debug_level = 4;
 
+#if SMAL_DEBUG
 static
 void _smal_debug(const char *func, const char *format, ...)
 {
@@ -65,12 +70,15 @@ void _smal_debug(const char *func, const char *format, ...)
   fprintf(stderr, "\n");
   fflush(stderr);
 }
+
 #define smal_debug(level, msg, args...)		\
   do {						\
   if ( smal_debug_level >= level ) 		\
     _smal_debug(__FUNCTION__, msg, ##args);	\
   } while(0)
-
+#else
+#define smal_debug(level, msg, args...) (void)0
+#endif
 
 /*********************************************************************
  * Debugging support.
@@ -427,10 +435,10 @@ void *smal_buffer_alloc_element(smal_buffer *self)
     }
   }
 
-  smal_debug(4, "buf = %p, ptr = %p", self, ptr);
+  smal_debug(4, "%p: ptr = %p", self, ptr);
   smal_debug(4, "  alloc_ptr = %p, alloc_n = %d", self->alloc_ptr, self->alloc_n);
-  smal_debug(4, "  free_list_n = %d, live_n = %d",
-	    self->free_list_n, self->live_n);
+  smal_debug(4, "  free_list_n = %d, avail_n = %d, live_n = %d",
+	     self->free_list_n, self->avail_n, self->live_n);
 
   return ptr;
 }
@@ -451,10 +459,10 @@ void smal_buffer_free_element(smal_buffer *self, void *ptr)
   ++ self->avail_n;
   ++ buffer_head.avail_n;
 
-  smal_debug(4, "buf = %p, ptr = %p", self, ptr);
+  smal_debug(4, "%p: ptr = %p", self, ptr);
   smal_debug(4, "  alloc_ptr = %p, alloc_n = %d", self->alloc_ptr, self->alloc_n);
-  smal_debug(4, "  free_list_n = %d, live_n = %d",
-	    self->free_list_n, self->live_n);
+  smal_debug(4, "  free_list_n = %d, avail_n = %d, live_n = %d",
+	     self->free_list_n, self->avail_n, self->live_n);
 
 }
 
@@ -521,10 +529,11 @@ void smal_collect()
   } smal_DLLIST_each_END();
 
   in_gc = 0;
-  smal_debug(1, "  alloc_n = %d, live_n = %d, free_list_n = %d",
-	    buffer_head.alloc_n,
-	    buffer_head.live_n,
-	    buffer_head.free_list_n
+  smal_debug(1, "  alloc_n = %d, live_n = %d, avail_n = %d, free_list_n = %d",
+	     buffer_head.alloc_n,
+	     buffer_head.live_n,
+	     buffer_head.avail_n,
+	     buffer_head.free_list_n
 	    );
 }
 
@@ -630,6 +639,19 @@ void *smal_type_alloc(smal_type *self)
   }
 
   return ptr;
+}
+
+void smal_type_free(void *ptr)
+{
+  smal_buffer *buf;
+  if ( (buf = smal_ptr_to_buffer(ptr)) ) {
+    smal_debug(5, "ptr %p => buf %p", ptr, buf);
+    if ( smal_buffer_ptr_is_validQ(buf, ptr) ) {
+      assert(buf->buffer_id == smal_buffer_buffer_id(buf));
+      smal_debug(6, "ptr %p is valid in buf %p", ptr, buf);
+      smal_buffer_free_element(buf, ptr);
+    }
+  }
 }
 
 /********************************************************************/
