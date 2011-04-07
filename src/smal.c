@@ -114,6 +114,7 @@ smal_buffer *smal_buffer_addr(void *ptr) {
 #define smal_buffer_addr(PTR) _smal_buffer_addr(PTR)
 
 static int in_gc;
+static int no_gc;
 static int inited;
 
 static
@@ -312,7 +313,7 @@ void smal_buffer_dealloc(smal_buffer *self)
   } while (0);
 
 #define smal_buffer_mark_clear(BUF, PTR) \
-  smal_buffer_mark_word(BUF, PTR) &= ~smal_buffer_mark_b(BUF, PTR)
+  smal_buffer_mark_word(BUF, PTR) &= ~ smal_buffer_mark_b(BUF, PTR)
 
 
 static
@@ -323,6 +324,16 @@ void smal_buffer_clear_mark_bits(smal_buffer *self)
   }
   memset(self->mark_bits, 0, sizeof(self->mark_bits[0]) * self->mark_bits_size);
   self->mark_bits_n = 0;
+}
+
+static
+void smal_buffer_set_mark_bits(smal_buffer *self)
+{
+  if ( ! self->mark_bits ) {
+    self->mark_bits = malloc(sizeof(self->mark_bits[0]) * self->mark_bits_size);
+  }
+  memset(self->mark_bits, ~0, sizeof(self->mark_bits[0]) * self->mark_bits_size);
+  self->mark_bits_n = self->alloc_n;
 }
 
 static
@@ -518,7 +529,7 @@ void smal_collect()
 
   smal_debug(1, "()");
 
-  if ( in_gc ) return;
+  if ( in_gc || no_gc ) return;
 
   in_gc = 1;
 
@@ -670,4 +681,38 @@ void smal_type_free(void *ptr)
 }
 
 /********************************************************************/
+
+void smal_each_object(void (*func)(smal_type *type, void *ptr, void *arg), void *arg)
+{
+  smal_buffer *buf;
+
+  if ( in_gc )
+    return;
+
+  /* 
+     For each smal_buffer:
+       Allocate a filled mark bitmap.
+       For each object in free_list,
+         Unmark bitmap.
+       Iterate from begin_ptr to alloc_ptr where mark is set.
+       Free mark bitmap.
+   */
+  ++ no_gc;
+
+  smal_DLLIST_each(&buffer_head, buf) {
+    smal_buffer_set_mark_bits(buf);
+    void *ptr;
+    for ( ptr = buf->free_list; ptr; ptr = *((void**) ptr) ) {
+      smal_buffer_mark_clear(buf, ptr);
+    }
+    for ( ptr = buf->begin_ptr; ptr < buf->alloc_ptr; ptr += smal_buffer_object_size(buf) ) {
+      if ( smal_buffer_markQ(buf, ptr) ) {
+	func(buf->type, ptr, arg);
+      }
+    }
+    smal_buffer_free_mark_bits(buf);
+  } smal_DLLIST_each_END();
+
+  -- no_gc;
+}
 

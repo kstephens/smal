@@ -73,6 +73,8 @@ void smal_mark_ptr(void *ptr); /* user can call this method. */
 void smal_mark_ptr_exact(void *ptr); /* assumes ptr is 0 or known to be properly allocated and aligned. */
 void smal_mark_roots(); /* user must define this method. */
 void smal_collect(); /* user can call this method. */
+/* Cannot be called during gc. */
+void smal_each_object(void (*func)(smal_type *type, void *ptr, void *arg), void *arg);
 
 #endif
 

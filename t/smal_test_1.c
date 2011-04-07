@@ -1,5 +1,7 @@
 #include "smal/smal.h"
 #include "smal/explicit_roots.h"
+#include <stdio.h>
+#include <assert.h>
 
 typedef void *my_oop;
 typedef struct my_cons {
@@ -17,6 +19,13 @@ static void my_cons_mark (void *ptr)
 void smal_mark_roots()
 {
   smal_roots_mark_chain(0);
+}
+
+static
+void count_object(smal_type *type, void *ptr, void *arg)
+{
+  fprintf(stderr, "  type %p obj %p\n", type, ptr);
+  (* (int *) arg) ++; 
 }
 
 int main()
@@ -38,6 +47,12 @@ int main()
 
   y = 0;
   smal_collect();
+
+  {
+    int obj_count = 0;
+    smal_each_object(count_object, &obj_count);
+    assert(obj_count == 1);
+  }
 
   x = 0;
   smal_collect();
