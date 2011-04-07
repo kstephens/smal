@@ -59,9 +59,7 @@ This operations takes 8 x86 instructions.
 === Issues ===
 
 * SMAL cannot service allocations larger than <code>smal_buffer_size - sizeof(smal_buffer)</code>.
-* The <code>buffer_id</code> hash table may become large and sparse when <code>mmap()</code> tends to not allocate 
-<code>smal_buffer</code>s in a mostly-contigious fashion --
-other active allocators (e.g.: <code>malloc()</code>) may cause holes in the address space consumed by SMAL.
+* The <code>buffer_id</code> hash table may become large and sparse when <code>mmap()</code> tends to not allocate <code>smal_buffer</code>s in a mostly-contigious fashion -- other active allocators (e.g.: <code>malloc()</code>) may cause holes in the address space consumed by SMAL.
 
 == Object Mark Bits ==
 
