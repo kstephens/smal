@@ -42,18 +42,18 @@ Every potential pointer maps to a unique <code>buffer_id</code>, computed
 by dividing a <code>smal_buffer*</code> address by <code>smal_buffer_size</code>.
 
 Since the <code>smal_buffer</code> header is always aligned to <code>smal_buffer_size</code>, 
-it's trivial to map a potential object ptr to a potential <code>smal_buffer*</code> or its <code>buffer_id</code>.
+it's trivial to map a potential object pointer to a potential <code>smal_buffer*</code> or its <code>buffer_id</code>.
 
 A perfect hash table that maps <code>buffer_id</code>s to <code>smal_buffer*</code> is maintained.
 A lack of an entry in this table, means that any potential
-ptr mapping within the aligned <code>smal_buffer_size</code> region is not an object pointer allocated from a <code>smal_buffer</code>.
+pointer mapping within the aligned <code>smal_buffer_size</code> region is not an object pointer allocated from a <code>smal_buffer</code>.
 
 Because the table is guaranteed to be perfect and non-colliding, mapping an arbitrary pointer to a 
 <code>smal_buffer</code> can be done in <code>O(1)</code> time, using a divide (or shift), a modulo and a vector index.
 This operation takes 6 x86 instructions.
 
-If a <code>smal_buffer*</code> can be found for a potential ptr, the ptr must also be within the <code>smal_buffer</code>'s
-[ <code>begin_ptr</code>, <code>alloc_ptr</code> ) region and must be aligned to <code>object_size</code>.
+If a <code>smal_buffer*</code> can be found for a potential pointer, the pointer must also be within the <code>smal_buffer</code>'s region between
+<code>begin_ptr</code> and <code>alloc_ptr</code> ) and must be aligned to <code>object_size</code>.
 This operations takes 8 x86 instructions.
 
 == Object Mark Bits ==
@@ -61,7 +61,7 @@ This operations takes 8 x86 instructions.
 Each <code>smal_buffer</code> maintains a mark bitmap for each object parceled from it.
 The mark bitmap is transient; it is <code>malloc()</code>ed and <code>free()</code>ed, on-demand, during <code>smal_collect()</code>.
 
-A pointer's mark bitmap index is computed by dividing the difference between the ptr and its <code>smal_buffer*</code> with
+A pointer's mark bitmap index is computed by dividing the difference between the pointer and its <code>smal_buffer*</code> with
 the size of the objects (<code>object_size</code>) allocated from the <code>smal_buffer</code>.
 
 == Object Marking Algorithms ==
@@ -70,9 +70,9 @@ The algorithms/data structures are as follows:
 
 === Mark a (potential) object ===
 
-1) Map potential object ptr to a potential <code>smal_buffer*</code>.
-2) Determine if object ptr within <code>smal_buffer</code> region where object allocations took place.
-3) Determine if object ptr has proper alignment to the head of the object allocation.
+1) Map potential object pointer to a potential <code>smal_buffer*</code>.
+2) Determine if object pointer within <code>smal_buffer</code> region where object allocations took place.
+3) Determine if object pointer has proper alignment to the head of the object allocation.
 4) Determine the mark bitmap offset.
 5) If object is not already marked, 
 5.1) mark the object and call the smal_type's mark function.
