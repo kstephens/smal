@@ -35,7 +35,7 @@ struct smal_stats {
   size_t alloc_n; /* number of objects allocated. */
   size_t avail_n; /* number of objects either unallocated or on free_list. */
   size_t live_n; /* number of objects known to be live. */
-  size_t free_list_n; /* number of objects on free_list. */
+  size_t free_n; /* number of objects on free_list. */
 };
 
 struct smal_type {

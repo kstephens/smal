@@ -331,8 +331,8 @@ void smal_buffer_dealloc(smal_buffer *self)
   buffer_head.stats.alloc_n -= self->stats.alloc_n;
   assert(buffer_head.stats.avail_n >= self->stats.avail_n);
   buffer_head.stats.avail_n -= self->stats.avail_n;
-  assert(buffer_head.stats.free_list_n >= self->stats.free_list_n);
-  buffer_head.stats.free_list_n -= self->stats.free_list_n;
+  assert(buffer_head.stats.free_n >= self->stats.free_n);
+  buffer_head.stats.free_n -= self->stats.free_n;
 
   result = munmap(addr, size);
   smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) addr, (unsigned long) size, (int) result);
@@ -472,10 +472,10 @@ void smal_buffer_check_free_list(smal_buffer *self)
 {
   void *p;
   int i = 0;
-  // fprintf(stderr, "%p free_list [%d] = { ", (void*) self, (int) self->free_list_n);
+  // fprintf(stderr, "%p free_list [%d] = { ", (void*) self, (int) self->free_n);
   for ( p = self->free_list; p; p = *((void**) p) ) {
     // fprintf(stderr, "%p, ", p);
-    assert(++ i <= self->free_list_n);
+    assert(++ i <= self->free_n);
   }
   // fprintf(stderr, "}\n");
 }
@@ -486,11 +486,11 @@ void *smal_buffer_alloc_object(smal_buffer *self)
   void *ptr;
 
   if ( (ptr = self->free_list) ) {
-    assert(self->stats.free_list_n > 0);
+    assert(self->stats.free_n > 0);
     self->free_list = * (void**) ptr;
-    -- self->stats.free_list_n;
-    assert(buffer_head.stats.free_list_n > 0);
-    -- buffer_head.stats.free_list_n;
+    -- self->stats.free_n;
+    assert(buffer_head.stats.free_n > 0);
+    -- buffer_head.stats.free_n;
     smal_bitmap_clr_c(&self->free_bits, smal_buffer_i(self, ptr));
   } else if ( self->alloc_ptr < self->end_ptr ){
     ptr = self->alloc_ptr;
@@ -515,8 +515,8 @@ void *smal_buffer_alloc_object(smal_buffer *self)
 
   smal_debug(4, "(%p) = %p", self, ptr);
   smal_debug(4, "  alloc_ptr = %p, stats.alloc_n = %d", self->alloc_ptr, self->stats.alloc_n);
-  smal_debug(4, "  stats.free_list_n = %d, stats.avail_n = %d, stats.live_n = %d",
-	     self->stats.free_list_n, self->stats.avail_n, self->stats.live_n);
+  smal_debug(4, "  stats.free_n = %d, stats.avail_n = %d, stats.live_n = %d",
+	     self->stats.free_n, self->stats.avail_n, self->stats.live_n);
 
   smal_buffer_check_free_list(self);
 
@@ -531,18 +531,18 @@ void smal_buffer_free_object(smal_buffer *self, void *ptr)
   self->type->free_func(ptr);
   * ((void**) ptr) = self->free_list;
   self->free_list = ptr;
-  ++ self->stats.free_list_n;
-  assert(self->stats.free_list_n);
-  ++ buffer_head.stats.free_list_n;
-  assert(buffer_head.stats.free_list_n);
+  ++ self->stats.free_n;
+  assert(self->stats.free_n);
+  ++ buffer_head.stats.free_n;
+  assert(buffer_head.stats.free_n);
 
   ++ self->stats.avail_n;
   ++ buffer_head.stats.avail_n;
 
   smal_debug(4, "%p: (%p)", self, ptr);
   smal_debug(4, "  alloc_ptr = %p, stats.alloc_n = %d", self->alloc_ptr, self->stats.alloc_n);
-  smal_debug(4, "  stats.free_list_n = %d, stats.avail_n = %d, stats.live_n = %d",
-	     self->stats.free_list_n, self->stats.avail_n, self->stats.live_n);
+  smal_debug(4, "  stats.free_n = %d, stats.avail_n = %d, stats.live_n = %d",
+	     self->stats.free_n, self->stats.avail_n, self->stats.live_n);
 
   smal_buffer_check_free_list(self);
 }
@@ -563,8 +563,8 @@ void smal_buffer_sweep(smal_buffer *self)
 	}
       }
     }
-    smal_debug(4, "  stats.live_n = %d, stats.free_list_n = %d",
-	      self->stats.live_n, self->stats.free_list_n);
+    smal_debug(4, "  stats.live_n = %d, stats.free_n = %d",
+	      self->stats.live_n, self->stats.free_n);
     assert(self->mark_bits.set_n == self->stats.live_n);
     smal_buffer_free_mark_bits(self);
     buffer_head.stats.live_n += self->stats.live_n;
@@ -612,11 +612,11 @@ void smal_collect()
   } smal_DLLIST_each_END();
 
   in_gc = 0;
-  smal_debug(1, "  stats.alloc_n = %d, stats.live_n = %d, stats.avail_n = %d, stats.free_list_n = %d",
+  smal_debug(1, "  stats.alloc_n = %d, stats.live_n = %d, stats.avail_n = %d, stats.free_n = %d",
 	     buffer_head.stats.alloc_n,
 	     buffer_head.stats.live_n,
 	     buffer_head.stats.avail_n,
-	     buffer_head.stats.free_list_n
+	     buffer_head.stats.free_n
 	    );
 }
 
