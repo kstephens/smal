@@ -266,7 +266,11 @@ void smal_buffer_dealloc(smal_buffer *self)
   if ( self->mark_bits ) free(self->mark_bits);
   smal_buffer_table_remove(self);
 
+  assert(buffer_head.alloc_n >= self->alloc_n);
   buffer_head.alloc_n -= self->alloc_n;
+  assert(buffer_head.avail_n >= self->avail_n);
+  buffer_head.avail_n -= self->avail_n;
+  assert(buffer_head.free_list_n >= self->free_list_n);
   buffer_head.free_list_n -= self->free_list_n;
 
   result = munmap(addr, size);
@@ -361,6 +365,8 @@ void smal_buffer_set_element_size(smal_buffer *self, size_t element_size)
   self->mark_bits_size = (self->mmap_size / self->element_size / smal_BITS_PER_WORD) + 1;
   self->mark_bits_n = 0;
 
+  buffer_head.avail_n += self->avail_n = self->element_capacity;
+
   smal_debug(2, "  element_size = %d, element_alignment = %d",
 	    (int) self->element_size, (int) self->element_alignment);
 
@@ -411,7 +417,11 @@ void *smal_buffer_alloc_element(smal_buffer *self)
 
   if ( ptr ) {
     ++ self->live_n;
-    
+    assert(self->avail_n);
+    -- self->avail_n;
+    assert(buffer_head.avail_n);
+    -- buffer_head.avail_n;
+
     if ( in_gc ) {
       smal_buffer_mark(self, ptr);
     }
@@ -438,6 +448,8 @@ void smal_buffer_free_element(smal_buffer *self, void *ptr)
   assert(self->free_list_n);
   ++ buffer_head.free_list_n;
   assert(buffer_head.free_list_n);
+  ++ self->avail_n;
+  ++ buffer_head.avail_n;
 
   smal_debug(4, "buf = %p, ptr = %p", self, ptr);
   smal_debug(4, "  alloc_ptr = %p, alloc_n = %d", self->alloc_ptr, self->alloc_n);
@@ -561,6 +573,7 @@ smal_type *smal_type_for(size_t element_size, smal_mark_func mark_func, smal_fre
       return type;
     }
   } smal_DLLIST_each_END();
+
   type = malloc(sizeof(*type));
   memset(type, 0, sizeof(*type));
   type->type_id = ++ type_head.type_id;
@@ -577,8 +590,9 @@ static
 smal_buffer *smal_type_find_alloc_buffer(smal_type *self)
 {
   smal_buffer *buf;
+  /* TODO: Find the smal_buffer that has the least free elements available. */
   smal_DLLIST_each(&buffer_head, buf) {
-    if ( buf->type == self && buf->live_n != buf->element_capacity )
+    if ( buf->type == self && (buf->free_list || buf->live_n != buf->element_capacity) )
       return buf;
   } smal_DLLIST_each_END();
   return 0;

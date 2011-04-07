@@ -44,6 +44,8 @@ struct smal_buffer {
   void *alloc_ptr; /* next location to allocate an element. */
   size_t alloc_n; /* number of elements allocated. */
 
+  size_t avail_n; /* number of elements either unallocated or on free_list. */
+
   size_t live_n; /* number of elements known to be live. */
 
   unsigned int *mark_bits;
