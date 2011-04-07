@@ -1,25 +1,29 @@
 
 INC_DIR=include/#
 
-CFLAGS = -O2 -g -Wall -Werror -I$(INC_DIR) #
+PTHREAD_CFLAGS = -DSMAL_PTHREAD=1 #
+CFLAGS = -O2 -g -Wall -Werror $(PTHREAD_CFLAGS) -I$(INC_DIR) #
 
-INCLUDES = $(INC_DIR)/smal/*.h #
-CFILES = *.c src/*.c
+INCLUDES := $(shell echo $(INC_DIR)/smal/*.h) #
+CFILES := $(shell echo src/*.c) #
 
-all : t/smal_test_1.t
+TESTS_C := $(shell echo t/*.c) #
+TESTS_T := $(TESTS_C:%.c=%.t) #
 
-smal.s : smal.c $(INCLUDES)
+all : $(TESTS_T)
+
+src/smal.s : src/smal.c $(INCLUDES)
 	$(CC) $(CFLAGS) -S -o $@ $<
 
-t/smal_test_1.t : t/smal_test_1.c $(CFILES) $(INCLUDES)
+t/%.t : t/%.c $(CFILES) $(INCLUDES)
 	$(CC) $(CFLAGS) -DSMAL_UNIT_TEST=1 -DSMAL_DEBUG=1 -o $@ $(@:.t=.c) $(CFILES)
 
 clean :
-	rm -rf *.s *.dSYM *.o *.a t/*.t t/*.dSYM
+	rm -rf *.s *.dSYM *.o *.a src/*.o src/*.a t/*.t t/*.dSYM
 
-test : all t/*.t
+test : all $(TESTS_T)
 	set -ex ;\
-	for t in t/*.t ;\
+	for t in $(TESTS_T) ;\
 	do \
 	  $$t || gdb --args $$t ;\
 	done

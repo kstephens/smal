@@ -8,6 +8,14 @@
 
 #include <stddef.h>
 
+#ifndef SMAL_PTHREAD
+#define SMAL_PTHREAD 0
+#endif
+
+#if SMAL_PTHREAD
+#include <pthread.h>
+#endif
+
 typedef void (*smal_mark_func)(void *ptr);
 typedef void (*smal_free_func)(void *ptr);
 

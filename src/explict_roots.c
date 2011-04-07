@@ -1,26 +1,18 @@
 
 #include "smal/smal.h"
+#include "smal/thread.h"
 #include "smal/explicit_roots.h"
+
+#include <assert.h>
+#include <stdlib.h> /* malloc(), free() */
 #include <stdio.h>
 
-/* NOT THREAD-SAFE */
-smal_roots *_smal_roots;
-
-smal_roots *smal_roots_current()
-{
-  return _smal_roots;
-}
-
-void smal_roots_set_current(smal_roots *roots)
-{
-  _smal_roots = roots;
-}
-
-void smal_roots_mark_chain(smal_roots *roots)
+static
+void mark_roots(smal_roots *roots)
 {
   if ( ! roots )
     roots = smal_roots_current();
-
+  
   while ( roots ) {
     int i;
     /* fprintf(stderr, "  roots %p [%d]\n", roots, roots->_n); */
@@ -31,6 +23,29 @@ void smal_roots_mark_chain(smal_roots *roots)
     }
     roots = roots->_next;
   }
+}
+
+smal_roots *smal_roots_current()
+{
+  smal_thread *t = smal_thread_self();
+  return t->roots;
+}
+
+void smal_roots_set_current(smal_roots *roots)
+{
+  smal_thread *t = smal_thread_self();
+  t->roots = roots;
+}
+
+static
+void mark_thread(smal_thread *t, void *arg)
+{
+  mark_roots(t->roots);
+}
+
+void smal_roots_mark_chain()
+{
+  smal_thread_each(mark_thread, 0);
 }
 
 

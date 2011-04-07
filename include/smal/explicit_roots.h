@@ -31,6 +31,6 @@ void smal_roots_set_current(smal_roots *);
 #define smal_roots_5(_1,_2,_3,_4,_5) \
   { void *_bindings[] = { &_1, &_2, &_3, &_4, &_5 }; smal_roots_begin(5)
 
-void smal_roots_mark_chain(smal_roots *roots);
+void smal_roots_mark_chain();
 
 #endif
