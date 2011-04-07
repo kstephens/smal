@@ -8,6 +8,11 @@
 <code>smal_buffer</code> represents a <code>mmap()</code> region of <code>smal_buffer_size</code> aligned to <code>smal_buffer_size</code>.
 Each <code>smal_buffer</code> is at the head of an <code>mmap()</code> region.
 
+== Types ==
+
+<code>smal_type</code> defines the size of objects and other characteristics that will be allocated from one or more <code>smal_buffer</code>s.
+<code>mark_func</code> and <code>free_func</code> callback can be registered for each <code>smal_type</code>.
+
 == Object Allocation ==
 
 Objects are parcelled, on-demand, from a <code>smal_buffer</code>, by incrementing <code>alloc_ptr</code> by a fixed object size, starting at <code>begin_ptr</code>
@@ -68,4 +73,23 @@ To mark a (potential) object:
 SMAL relies on <code>MAP_ANON</code> <code>mmap()</code>/<code>munmap()</code>.
 SMAL relies on <code>malloc()</code>/<code>free()</code>, thus can co-exist with any other <code>mmap()</code>-based <code>malloc()</code>/<code>free()</code> library.
 
+== Roots ==
+
+The user must provide a <code>smal_mark_roots()</code> function.
+This allows the user to configure support for different configurations:
+* single-threaded
+* multi-threaded
+* conservative
+* type-safe 
+SMAL does provide a simple explicit <code>smal_roots</code> system.
+
+== Threads ==
+
+SMAL supports a tiny <code>smal_thread</code> abstraction around <code>pthreads</code>.
+The <code>smal_roots</code> package will work in a pthread environment.
+
+== TODO ==
+
+* Support for weak references.
+* Support for finalization.
 
