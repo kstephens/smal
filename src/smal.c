@@ -1,3 +1,7 @@
+/*
+  SMAL
+  Copyright (c) 2011 Kurt A. Stephens
+*/
 
 #include <stdlib.h> /* malloc(), free() */
 #include <string.h> /* memset() */

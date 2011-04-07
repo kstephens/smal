@@ -1,3 +1,8 @@
+/*
+  SMAL
+  Copyright (c) 2011 Kurt A. Stephens
+*/
+
 #ifndef _SMAL_EXPLICIT_ROOTS_H
 #define _SMAL_EXPLICIT_ROOTS_H
 

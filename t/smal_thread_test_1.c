@@ -1,3 +1,8 @@
+/*
+  SMAL
+  Copyright (c) 2011 Kurt A. Stephens
+*/
+
 #include "smal/smal.h"
 #include "smal/thread.h"
 #include <unistd.h>

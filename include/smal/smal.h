@@ -1,10 +1,10 @@
+/*
+  SMAL
+  Copyright (c) 2011 Kurt A. Stephens
+*/
+
 #ifndef SMAL_SMAL_H
 #define SMAL_SMAL_H
-
-
-/* SMAL: a [S]imple [M]ark-sweep [AL]locator
-   Copyright Kurt Stephens 2011.
- */
 
 #include <stddef.h>
 

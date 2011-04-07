@@ -1,3 +1,5 @@
+# SMAL
+# Copyright (c) 2011 Kurt A. Stephens
 
 INC_DIR=include/#
 

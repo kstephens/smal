@@ -132,6 +132,10 @@ The rest of the SMAL allocator is not yet thread-safe.
 
 SMAL supports global object enumeration (i.e. Ruby ObjectSpace.each_object).
 
+== Licensing ==
+
+MIT License
+
 == TODO ==
 
 * Support for weak references.
