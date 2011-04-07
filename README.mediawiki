@@ -104,10 +104,13 @@ However, SMAL provides a simple, <code>smal_roots</code> package to explicitly d
 == Threads ==
 
 SMAL supports a tiny <code>smal_thread</code> abstraction around <code>pthreads</code>.
-The <code>smal_roots</code> package is thread-safe.
+The <code>smal_roots</code> package is thread-aware and thread-safe.  
+The rest of the SMAL allocator is not yet thread-safe.
 
 == TODO ==
 
 * Support for weak references.
 * Support for finalization.
+* Full-thread safety.
+
 
