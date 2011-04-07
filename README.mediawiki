@@ -34,7 +34,7 @@ suitable for conservative and non-conservative collection.
 
 === Issues ===
 
-SMAL cannot service allocations large than <code>smal_buffer_size - sizeof(smal_buffer)</code>.
+SMAL cannot service allocations larger than <code>smal_buffer_size - sizeof(smal_buffer)</code>.
 
 === Characteristics ===
 
