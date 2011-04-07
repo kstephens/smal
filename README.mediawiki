@@ -1,6 +1,6 @@
 
-= SMAL: A (S)imple, (M)ark-sweep (AL)locator. =
-@
+= SMAL - A (S)imple, (M)ark-sweep (AL)locator =
+
 == Data Structure Overview ==
 
 <code>smal_type</code> represents a user-data type of a fixed size, mark and free callbacks.
