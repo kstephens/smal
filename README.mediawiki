@@ -93,12 +93,12 @@ This allows the user to configure support for different configurations:
 * multi-threaded
 * conservative
 * type-safe 
-SMAL does provide a simple explicit <code>smal_roots</code> system.
+However, SMAL provides a simple, <code>smal_roots</code> package to explicitly declare root pointers on the C stack.
 
 == Threads ==
 
 SMAL supports a tiny <code>smal_thread</code> abstraction around <code>pthreads</code>.
-The <code>smal_roots</code> package will work in a pthread environment.
+The <code>smal_roots</code> package is thread-safe.
 
 == TODO ==
 
