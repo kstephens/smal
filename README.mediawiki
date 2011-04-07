@@ -21,8 +21,12 @@ This is achieved by <code>mmap()</code>ing <code>smal_buffer_size * 2</code> byt
 == Object Allocation ==
 
 Objects are parceled, on-demand, from a <code>smal_buffer</code>, by incrementing <code>alloc_ptr</code> by the <code>smal_type</code>'s fixed object size, <code>object_size</code>, starting at <code>begin_ptr</code> and terminating at <code>end_ptr</code>.
-Unused objects that are returned to the <code>smal_buffer</code> are kept on its <code>free_list</code>.
-<code>smal_buffers</code> without active objects are <code>munmap</code>ed and returned to the OS.
+
+== Object Reclaimation ==
+
+Each <code>smal_buffer</code> keeps its own <code>free_list</code>.  
+A free bitmap is also maintained to avoid double-free during sweep.
+<code>smal_buffers</code> without active objects are <code>munmap</code>ed and returned to the OS after <code>smal_collect()</code>.
 
 == Allocation Scheduling ==
 
@@ -32,7 +36,7 @@ Since SMAL does not compact or relocate objects during collection, it attempts t
 
 == Collection Scheduling ==
 
-SAML has no default collection scheduling algorithm.  Users must decide on when to call <code>smal_collect()</code>.
+SAML has no default collection scheduling algorithm or policy.  Users must decide on when to call <code>smal_collect()</code>.
 
 == Memory Alignment ==
 
@@ -84,10 +88,6 @@ the size of the objects (<code>object_size</code>) allocated from the <code>smal
 If an object pointer is known to be allocated and aligned, <code>smal_mark_ptr_exact()</code> can test the mark bit in 25 x86 instructions,
 and mark the bit and recurse into the <code>mark_func</code> in another 7 x86 instructions, for a worst case of 32 x86 instructions.
 The non-exact version takes approx. 39 x86 instrutions in the worst case.
-
-== Free List ==
-
-Each <code>smal_buffer</code> keeps its own <code>free_list</code>.  A free bitmap is also maintained to avoid double-free during sweep.
 
 == Mark-Sweep ==
 

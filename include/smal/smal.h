@@ -21,10 +21,22 @@ typedef void (*smal_free_func)(void *ptr);
 
 struct smal_type;
 typedef struct smal_type smal_type;
+
 struct smal_bitmap;
 typedef struct smal_bitmap smal_bitmap;
+
 struct smal_buffer;
 typedef struct smal_buffer smal_buffer;
+
+struct smal_stats;
+typedef struct smal_stats smal_stats;
+
+struct smal_stats {
+  size_t alloc_n; /* number of objects allocated. */
+  size_t avail_n; /* number of objects either unallocated or on free_list. */
+  size_t live_n; /* number of objects known to be live. */
+  size_t free_list_n; /* number of objects on free_list. */
+};
 
 struct smal_type {
   smal_type *next, *prev; /* global list of all smal_types. */
@@ -33,6 +45,7 @@ struct smal_type {
   smal_mark_func mark_func;
   smal_free_func free_func;
   smal_buffer *alloc_buffer;
+  smal_stats stats;
 };
 
 struct smal_bitmap {
@@ -58,18 +71,13 @@ struct smal_buffer {
 
   void *begin_ptr; /* start of object allocations. */
   void *end_ptr; /* alloc_ptr guard. */
-
   void *alloc_ptr; /* next location to allocate an object. */
-  size_t alloc_n; /* number of objects allocated. */
 
-  size_t avail_n; /* number of objects either unallocated or on free_list. */
-
-  size_t live_n; /* number of objects known to be live. */
+  smal_stats stats;
 
   smal_bitmap mark_bits;
 
   void *free_list;
-  int free_list_n; /* number of objects on free_list. */
   smal_bitmap free_bits;
 };
 

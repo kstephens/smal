@@ -327,12 +327,12 @@ void smal_buffer_dealloc(smal_buffer *self)
 
   smal_buffer_table_remove(self);
 
-  assert(buffer_head.alloc_n >= self->alloc_n);
-  buffer_head.alloc_n -= self->alloc_n;
-  assert(buffer_head.avail_n >= self->avail_n);
-  buffer_head.avail_n -= self->avail_n;
-  assert(buffer_head.free_list_n >= self->free_list_n);
-  buffer_head.free_list_n -= self->free_list_n;
+  assert(buffer_head.stats.alloc_n >= self->stats.alloc_n);
+  buffer_head.stats.alloc_n -= self->stats.alloc_n;
+  assert(buffer_head.stats.avail_n >= self->stats.avail_n);
+  buffer_head.stats.avail_n -= self->stats.avail_n;
+  assert(buffer_head.stats.free_list_n >= self->stats.free_list_n);
+  buffer_head.stats.free_list_n -= self->stats.free_list_n;
 
   result = munmap(addr, size);
   smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) addr, (unsigned long) size, (int) result);
@@ -397,7 +397,7 @@ void smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
   self->free_bits.size = self->object_capacity;
   smal_bitmap_init(&self->free_bits);
 
-  buffer_head.avail_n += self->avail_n = self->object_capacity;
+  buffer_head.stats.avail_n += self->stats.avail_n = self->object_capacity;
 
   smal_debug(2, "  object_size = %d, object_alignment = %d",
 	    (int) self->object_size, (int) self->object_alignment);
@@ -486,27 +486,27 @@ void *smal_buffer_alloc_object(smal_buffer *self)
   void *ptr;
 
   if ( (ptr = self->free_list) ) {
-    assert(self->free_list_n > 0);
+    assert(self->stats.free_list_n > 0);
     self->free_list = * (void**) ptr;
-    -- self->free_list_n;
-    assert(buffer_head.free_list_n > 0);
-    -- buffer_head.free_list_n;
+    -- self->stats.free_list_n;
+    assert(buffer_head.stats.free_list_n > 0);
+    -- buffer_head.stats.free_list_n;
     smal_bitmap_clr_c(&self->free_bits, smal_buffer_i(self, ptr));
   } else if ( self->alloc_ptr < self->end_ptr ){
     ptr = self->alloc_ptr;
     self->alloc_ptr += smal_buffer_object_size(self);
-    ++ self->alloc_n;
-    ++ buffer_head.alloc_n;
+    ++ self->stats.alloc_n;
+    ++ buffer_head.stats.alloc_n;
   } else {
     ptr = 0;
   }
 
   if ( ptr ) {
-    ++ self->live_n;
-    assert(self->avail_n);
-    -- self->avail_n;
-    assert(buffer_head.avail_n);
-    -- buffer_head.avail_n;
+    ++ self->stats.live_n;
+    assert(self->stats.avail_n);
+    -- self->stats.avail_n;
+    assert(buffer_head.stats.avail_n);
+    -- buffer_head.stats.avail_n;
 
     if ( in_gc ) {
       smal_buffer_mark(self, ptr);
@@ -514,9 +514,9 @@ void *smal_buffer_alloc_object(smal_buffer *self)
   }
 
   smal_debug(4, "(%p) = %p", self, ptr);
-  smal_debug(4, "  alloc_ptr = %p, alloc_n = %d", self->alloc_ptr, self->alloc_n);
-  smal_debug(4, "  free_list_n = %d, avail_n = %d, live_n = %d",
-	     self->free_list_n, self->avail_n, self->live_n);
+  smal_debug(4, "  alloc_ptr = %p, stats.alloc_n = %d", self->alloc_ptr, self->stats.alloc_n);
+  smal_debug(4, "  stats.free_list_n = %d, stats.avail_n = %d, stats.live_n = %d",
+	     self->stats.free_list_n, self->stats.avail_n, self->stats.live_n);
 
   smal_buffer_check_free_list(self);
 
@@ -531,17 +531,18 @@ void smal_buffer_free_object(smal_buffer *self, void *ptr)
   self->type->free_func(ptr);
   * ((void**) ptr) = self->free_list;
   self->free_list = ptr;
-  ++ self->free_list_n;
-  assert(self->free_list_n);
-  ++ buffer_head.free_list_n;
-  assert(buffer_head.free_list_n);
-  ++ self->avail_n;
-  ++ buffer_head.avail_n;
+  ++ self->stats.free_list_n;
+  assert(self->stats.free_list_n);
+  ++ buffer_head.stats.free_list_n;
+  assert(buffer_head.stats.free_list_n);
+
+  ++ self->stats.avail_n;
+  ++ buffer_head.stats.avail_n;
 
   smal_debug(4, "%p: (%p)", self, ptr);
-  smal_debug(4, "  alloc_ptr = %p, alloc_n = %d", self->alloc_ptr, self->alloc_n);
-  smal_debug(4, "  free_list_n = %d, avail_n = %d, live_n = %d",
-	     self->free_list_n, self->avail_n, self->live_n);
+  smal_debug(4, "  alloc_ptr = %p, stats.alloc_n = %d", self->alloc_ptr, self->stats.alloc_n);
+  smal_debug(4, "  stats.free_list_n = %d, stats.avail_n = %d, stats.live_n = %d",
+	     self->stats.free_list_n, self->stats.avail_n, self->stats.live_n);
 
   smal_buffer_check_free_list(self);
 }
@@ -555,21 +556,21 @@ void smal_buffer_sweep(smal_buffer *self)
     void *ptr;
     for ( ptr = self->begin_ptr; ptr < self->alloc_ptr; ptr += smal_buffer_object_size(self) ) {
       if ( smal_buffer_markQ(self, ptr) ) {
-	++ self->live_n;
+	++ self->stats.live_n;
       } else {
 	if ( ! smal_bitmap_setQ(&self->free_bits, smal_buffer_i(self, ptr)) ) {
 	  smal_buffer_free_object(self, ptr);
 	}
       }
     }
-    smal_debug(4, "  live_n = %d, free_list_n = %d",
-	      self->live_n, self->free_list_n);
-    assert(self->mark_bits.set_n == self->live_n);
+    smal_debug(4, "  stats.live_n = %d, stats.free_list_n = %d",
+	      self->stats.live_n, self->stats.free_list_n);
+    assert(self->mark_bits.set_n == self->stats.live_n);
     smal_buffer_free_mark_bits(self);
-    buffer_head.live_n += self->live_n;
+    buffer_head.stats.live_n += self->stats.live_n;
   } else {
     /* All objects in this buffer are free. */
-    assert(! self->live_n);
+    assert(! self->stats.live_n);
     /* Call free_func, if necessary. */
     if ( self->type->free_func != null_func ) {
       void *ptr;
@@ -585,7 +586,7 @@ void smal_buffer_sweep(smal_buffer *self)
 void smal_buffer_pre_mark(smal_buffer *self)
 {
   smal_buffer_clear_mark_bits(self);
-  self->live_n = 0;
+  self->stats.live_n = 0;
 }
 
 
@@ -599,7 +600,7 @@ void smal_collect()
 
   in_gc = 1;
 
-  buffer_head.live_n = 0;
+  buffer_head.stats.live_n = 0;
   smal_DLLIST_each(&buffer_head, buf) {
     smal_buffer_pre_mark(buf);
   } smal_DLLIST_each_END();
@@ -611,11 +612,11 @@ void smal_collect()
   } smal_DLLIST_each_END();
 
   in_gc = 0;
-  smal_debug(1, "  alloc_n = %d, live_n = %d, avail_n = %d, free_list_n = %d",
-	     buffer_head.alloc_n,
-	     buffer_head.live_n,
-	     buffer_head.avail_n,
-	     buffer_head.free_list_n
+  smal_debug(1, "  stats.alloc_n = %d, stats.live_n = %d, stats.avail_n = %d, stats.free_list_n = %d",
+	     buffer_head.stats.alloc_n,
+	     buffer_head.stats.live_n,
+	     buffer_head.stats.avail_n,
+	     buffer_head.stats.free_list_n
 	    );
 }
 
@@ -693,7 +694,7 @@ smal_buffer *smal_type_find_alloc_buffer(smal_type *self)
   smal_buffer *buf;
   /* TODO: Find the smal_buffer that has the least free objects available. */
   smal_DLLIST_each(&buffer_head, buf) {
-    if ( buf->type == self && (buf->free_list || buf->live_n != buf->object_capacity) )
+    if ( buf->type == self && (buf->free_list || buf->stats.live_n != buf->object_capacity) )
       return buf;
   } smal_DLLIST_each_END();
   return 0;
