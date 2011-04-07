@@ -1,4 +1,3 @@
-
 #include "smal/smal.h"
 #include "smal/thread.h"
 #include "smal/dllist.h"
@@ -21,7 +20,7 @@ static pthread_mutex_t thread_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 void thread_exit(void *arg)
 {
   smal_thread *t = arg;
-  fprintf(stderr, "  thread_exit() %p\n", (void*) pthread_self());
+  // fprintf(stderr, "  thread_exit() %p\n", (void*) pthread_self());
   pthread_mutex_lock(&thread_list_mutex);
   smal_DLLIST_DELETE(t);
   free(t);
@@ -46,13 +45,13 @@ void thread_init(smal_thread *t)
 static
 void thread_prepare()
 {
-  fprintf(stderr, "  thread_prepare() %p\n", (void*) pthread_self());
+  // fprintf(stderr, "  thread_prepare() %p\n", (void*) pthread_self());
 }
 
 static
 void thread_parent()
 {
-  fprintf(stderr, "  thread_parent() %p\n", (void*) pthread_self());
+  // fprintf(stderr, "  thread_parent() %p\n", (void*) pthread_self());
 }
 
 static
@@ -60,12 +59,12 @@ void thread_child()
 {
   smal_thread *t;
 
-  fprintf(stderr, "  thread_child() %p\n", (void*) pthread_self());
+  // fprintf(stderr, "  thread_child() %p\n", (void*) pthread_self());
 
   t = malloc(sizeof(*t));
   thread_init(t);
 
-  fprintf(stderr, "  thread_child() %p = %p\n", (void*) pthread_self(), t);
+  // fprintf(stderr, "  thread_child() %p = %p\n", (void*) pthread_self(), t);
 }
 
 void smal_thread_init()
@@ -101,7 +100,7 @@ smal_thread *smal_thread_self()
       t = pthread_getspecific(roots_key);
     }
     assert(t);
-    fprintf(stderr, "smal_thread_self() = %p: %p\n", t, (void*) t->thread);
+    // fprintf(stderr, "smal_thread_self() = %p: %p\n", t, (void*) t->thread);
     return t;
   }
 }
