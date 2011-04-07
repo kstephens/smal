@@ -72,7 +72,7 @@ the size of the objects (<code>object_size</code>) allocated from the <code>smal
 
 If a pointer is known to be allocated and aligned, <code>smal_makr_ptr_exact()</code> can test the mark bit in 25 x86 instructions,
 and mark the bit and recurse into the <code>mark_func</code> in another 6 x86 instructions.  
-The non-exact version takes a total of 40 x86 instrutions in the worst case.
+The non-exact version takes approx. 40 x86 instrutions in the worst case.
 
 == Mark-Sweep ==
 
