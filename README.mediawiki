@@ -70,17 +70,17 @@ The algorithms/data structures are as follows:
 
 === Mark a (potential) object ===
 
-1) Map potential object pointer to a potential <code>smal_buffer*</code>.
-2) Determine if object pointer within <code>smal_buffer</code> region where object allocations took place.
-3) Determine if object pointer has proper alignment to the head of the object allocation.
-4) Determine the mark bitmap offset.
-5) If object is not already marked, 
-5.1) mark the object and call the smal_type's mark function.
+#. Map potential object pointer to a potential <code>smal_buffer*</code>.
+#. Determine if object pointer within <code>smal_buffer</code> region where object allocations took place.
+#. Determine if object pointer has proper alignment to the head of the object allocation.
+#. Determine the mark bitmap offset.
+#. If object is not already marked, 
+#.#. mark the object and call the smal_type's mark function.
 
-=== Sweep ==
+=== Sweep ===
 
-1) For each <code>smal_buffer</code>
-2) MORE HERE.
+#. For each <code>smal_buffer</code>
+#. MORE HERE.
 
 == Ecology ==
 
