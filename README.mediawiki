@@ -29,26 +29,26 @@ SMAL cannot service allocations large than <code>smal_buffer_size - sizeof(smal_
 Every potental <code>smal_buffer*</code> maps to a "buffer_id".  A <code>smal_buffer</code>'s <code>buffer_id</code> is computed
 by dividing the <code>smal_buffer</code> address by <code>smal_buffer_size</code>.
 
-Since the smal_buffer header always resides at the aligned start of smal_buffer_size, 
-it's trivial to map a potential object ptr to a potential smal_buffer* or its buffer_id.
+Since the <code>smal_buffer</code> header always resides at the aligned to <code>smal_buffer_size</code>, 
+it's trivial to map a potential object ptr to a potential <code>smal_buffer*</code> or its <code>buffer_id</code>.
 
-A perfect hash table that maps buffer ids to smal_buffer* is maintained.
+A perfect hash table that maps <code>buffer_id</code>s to <code>smal_buffer*</code> is maintained.
 A lack of an entry in this table, means that any potential
-ptr mapping within the aligned buffer_id region does not come from an mmap()'ed smal_buffer.  
+ptr mapping within the aligned <code>buffer_id</code> region does not come from an <code>mmap()</code>'ed <code>smal_buffer</code>.  
 
 Because the table is guaranteed to be perfect and non-colliding, mapping arbitrary ptr to 
 smal_buffers can be done in O(1) time using a divide (or shift), a modulo and a vector index.
 
-If a smal_buffer* can be found for a potential ptr, the ptr must also be within the smal_buffer's
-[ begin_ptr, alloc_ptr ) region.
+If a <code>smal_buffer*</code> can be found for a potential ptr, the ptr must also be within the <code>smal_buffer</code>'s
+[ <code>begin_ptr</code>, <code>alloc_ptr</code> ) region.
 
 == Object Mark Bits ==
 
-Each smal_buffer maintains a mark bitmap for each object parcelled from it.
-The mark bitmap is transient; it's allocated and freed on demand during smal_collect.
+Each <code>smal_buffer</code> maintains a mark bitmap for each object parcelled from it.
+The mark bitmap is transient; it's allocated and freed on demand during <code>smal_collect()</code>.
 
-A pointer's mark bitmap index is computed by dividing the difference between the ptr and its smal_buffer* with
-the size of the objects allocated from the smal_buffer.
+A pointer's mark bitmap index is computed by dividing the difference between the ptr and its <code>smal_buffer*</code> with
+the size of the objects (<code>element_size</code>) allocated from the <code>smal_buffer</code>.
 
 == Object Marking Algoritm ==
 
@@ -56,8 +56,8 @@ The algorithm/data structures are as follows:
 
 To mark a (potential) object:
 
-1) Map potential object ptr to a potential smal_buffer *.
-2) Determine if object ptr within smal_buffer region where object allocations took place.
+1) Map potential object ptr to a potential <code>smal_buffer*</code>.
+2) Determine if object ptr within <code>smal_buffer</code> region where object allocations took place.
 3) Determine if object ptr has proper alignment to the head of the object allocation.
 4) Determine the mark bitmap offset.
 5) If object is not already marked, 
@@ -65,7 +65,7 @@ To mark a (potential) object:
 
 == Ecology ==
 
-SMAL relies on MAP_ANON mmap()/munmap().
-SMAL relies on malloc()/free(), thus can co-exist with any other mmap()-based malloc()/free() library.
+SMAL relies on <code>MAP_ANON</code> <code>mmap()</code>/<code>munmap()</code>.
+SMAL relies on <code>malloc()</code>/<code>free()</code>, thus can co-exist with any other <code>mmap()</code>-based <code>malloc()</code>/<code>free()</code> library.
 
 
