@@ -100,6 +100,7 @@ The algorithms/data structures are as follows:
 
 SMAL relies on <code>MAP_ANON</code> <code>mmap()</code>/<code>munmap()</code> and <code>malloc()</code>/<code>free()</code>, 
 thus can co-exist with any other <code>mmap()</code>-based <code>malloc()</code>/<code>free()</code> library.
+SMAL probably cannot co-exist with allocators that use <code>sbrk()</code>.
 
 == Roots ==
 
