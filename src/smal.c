@@ -223,7 +223,15 @@ void smal_buffer_table_add(smal_buffer *self)
   // fprintf(stderr, "smal_buffer_table_add(%p)\n", self);
 
   if ( buffer_id_min == 0 && buffer_id_max == 0 ) {
+    smal_buffer *buf;
     buffer_id_min = buffer_id_max = self->buffer_id;
+    smal_DLLIST_each(&buffer_head, buf) {
+      if ( buffer_id_min > buf->buffer_id )
+	buffer_id_min = buf->buffer_id;
+      if ( buffer_id_max < buf->buffer_id )
+	buffer_id_max = buf->buffer_id;
+    } smal_DLLIST_each_END();
+
   } else {
     if ( buffer_id_min > self->buffer_id )
       buffer_id_min = self->buffer_id;
@@ -233,8 +241,10 @@ void smal_buffer_table_add(smal_buffer *self)
 
   buffer_table_size_new = (buffer_id_max - buffer_id_min) + 1;
   buffer_table_new = malloc(sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1));
-  // fprintf(stderr, "smal_buffer_table_add(%p): malloc(%lu) = %p\n", self, (unsigned long) (sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1)), buffer_table_new);
   memset(buffer_table_new, 0, sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1));
+
+  // fprintf(stderr, "%lu buffer_id %lu @ %p [%lu, %lu]\n", (unsigned long) buffer_head.stats.buffer_n, (unsigned long) self->buffer_id, self, (unsigned long) buffer_id_min, (unsigned long) buffer_id_max);
+  // fprintf(stderr, "smal_buffer_table_add(%p): malloc([%lu]) = %p\n", self, (unsigned long) buffer_table_size_new, buffer_table_new);
 
   if ( buffer_table ) {
     for ( i = 0; i < buffer_table_size; ++ i ) {
@@ -269,6 +279,11 @@ void smal_buffer_table_remove(smal_buffer *self)
   buffer_table[i] = 0;
 
   smal_DLLIST_DELETE(self);
+
+  /* Readjust buffer_table window. */
+  if ( buffer_id_min == self->buffer_id || buffer_id_max == self->buffer_id ) {
+    buffer_id_min = buffer_id_max = 0;
+  }
 }
 
 
@@ -567,12 +582,10 @@ void *smal_buffer_alloc_object(smal_buffer *self)
     ++ buffer_head.stats.alloc_id;
 
     ++ self->stats.live_n;
-    assert(self->stats.avail_n);
     ++ self->type->stats.live_n;
     ++ buffer_head.stats.live_n;
 
     -- self->stats.avail_n;
-    assert(self->type->stats.avail_n);
     -- self->type->stats.avail_n;
     assert(buffer_head.stats.avail_n);
     -- buffer_head.stats.avail_n;
@@ -604,7 +617,6 @@ void smal_buffer_free_object(smal_buffer *self, void *ptr)
   self->free_list = ptr;
 
   ++ self->stats.free_n;
-  assert(self->stats.free_n);
   ++ self->type->stats.free_n;
   ++ buffer_head.stats.free_n;
   assert(buffer_head.stats.free_n);
@@ -612,6 +624,7 @@ void smal_buffer_free_object(smal_buffer *self, void *ptr)
   ++ self->stats.avail_n;
   ++ self->type->stats.avail_n;
   ++ buffer_head.stats.avail_n;
+  assert(buffer_head.stats.avail_n);
 
   ++ self->stats.free_id;
   ++ self->type->stats.free_id;

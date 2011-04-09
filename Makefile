@@ -37,12 +37,12 @@ test : all $(TESTS_T)
 	set -ex ;\
 	for t in $(TESTS_T) ;\
 	do \
-	  $$t || gdb --args $$t ;\
+	  time $$t || gdb --args $$t ;\
 	done
  
 valgrind : all $(TEST_T)
 	set -ex ;\
 	for t in $(TESTS_T) ;\
 	do \
-	  valgrind $$t || gdb --args $$t ;\
+	  time valgrind $$t || gdb --args $$t ;\
 	done
