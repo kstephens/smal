@@ -8,13 +8,8 @@
 
 #include <stddef.h>
 
-#ifndef SMAL_PTHREAD
-#define SMAL_PTHREAD 0
-#endif
-
-#if SMAL_PTHREAD
-#include <pthread.h>
-#endif
+#define smal_alignedQ(ptr,align) (((size_t)(ptr) % (align)) == 0)
+#define smal_ALIGN(ptr,align) if ( (size_t)(ptr) % (align) ) (ptr) += (align) - ((size_t)(ptr) % (align))
 
 typedef void (*smal_mark_func)(void *ptr);
 typedef void (*smal_free_func)(void *ptr);
@@ -63,7 +58,7 @@ struct smal_buffer {
   smal_type *type;
 
   size_t object_size;
-  size_t object_alignment;
+  size_t object_alignment; /* defaults to object_size. */
   size_t object_capacity; /* number of objects that can be allocated from this buffer. */
 
   void *mmap_addr;
@@ -90,8 +85,11 @@ void smal_mark_ptr(void *ptr); /* user can call this method. */
 void smal_mark_ptr_exact(void *ptr); /* assumes ptr is 0 or known to be properly allocated and aligned. */
 void smal_mark_roots(); /* user must define this method. */
 void smal_collect(); /* user can call this method. */
-/* Cannot be called during gc. */
+/* Disables GC while executing. */
 void smal_each_object(void (*func)(smal_type *type, void *ptr, void *arg), void *arg);
+
+void smal_global_stats(smal_stats *stats);
+void smal_type_stats(smal_type *type, smal_stats *stats);
 
 #endif
 

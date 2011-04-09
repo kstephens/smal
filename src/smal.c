@@ -9,9 +9,15 @@
 #include <stdio.h> /* perror() */
 #include <sys/errno.h>
 #include <stdarg.h>
+#ifdef SMAL_PROF
+#define NASSERT 1
+#define malloc(x) ({ size_t size = (x); void *ptr = malloc(size); fprintf(stderr, "  SMAL_PROF: %s:%-4d: malloc(%lu) = %p\n", __FILE__, __LINE__, (unsigned long) size, ptr); ptr; })
+#define free(x) fprintf(stderr, "  SMAL_PROF: %s:%-4d: free(%p) ignored\n", __FILE__, __LINE__, (x))
+#endif
 #include <assert.h>
 #include "smal/smal.h"
 #include "smal/dllist.h"
+
 
 /*********************************************************************
  * Configuration
@@ -45,6 +51,10 @@ size_t smal_buffer_mask = (4 * 4 * 1024) - 1;
 #define smal_buffer_object_alignment(buf) (buf)->object_alignment
 #endif
 
+#ifndef SMAL_FREE_MARK_BITS
+#define SMAL_FREE_MARK_BITS 0 /* free mark_bits after sweep? */
+#endif
+
 /*********************************************************************
  * bitmaps
  */
@@ -54,6 +64,7 @@ size_t smal_buffer_mask = (4 * 4 * 1024) - 1;
 static
 void smal_bitmap_clr_all(smal_bitmap *self)
 {
+  assert(self->bits);
   memset(self->bits, 0, self->bits_size);
   self->set_n = 0;
   self->clr_n = self->size;
@@ -74,6 +85,7 @@ int smal_bitmap_init(smal_bitmap *self)
 {
   self->bits_size = sizeof(self->bits[0]) * ((self->size / smal_BITS_PER_WORD) + 1);
   self->set_n = self->clr_n = 0;
+  assert(self->bits == 0);
   if ( ! (self->bits = malloc(self->bits_size)) )
     return -1;
   smal_bitmap_clr_all(self);
@@ -149,9 +161,6 @@ smal_buffer **buffer_table;
 static
 size_t buffer_table_size;
 
-#define smal_alignedQ(ptr,align) (((size_t)(ptr) % (align)) == 0)
-#define smal_ALIGN(ptr,align) if ( (size_t)(ptr) % (align) ) ptr += (align) - ((size_t)(ptr) % (align))
-
 #define _smal_buffer_buffer_id(PTR) (((size_t) (PTR)) / smal_buffer_size)
 #define _smal_buffer_offset(PTR) (((size_t) (PTR)) & smal_buffer_mask)
 #define _smal_buffer_addr(PTR) ((void*)(((size_t) (PTR)) & ~smal_buffer_mask))
@@ -207,6 +216,8 @@ void smal_buffer_table_add(smal_buffer *self)
   size_t buffer_table_size_new;
   smal_buffer **buffer_table_new;
   
+  // fprintf(stderr, "smal_buffer_table_add(%p)\n", self);
+
   if ( buffer_id_min == 0 && buffer_id_max == 0 ) {
     buffer_id_min = buffer_id_max = self->buffer_id;
   } else {
@@ -216,8 +227,9 @@ void smal_buffer_table_add(smal_buffer *self)
       buffer_id_max = self->buffer_id;
   }
 
-  buffer_table_size_new = buffer_id_max - buffer_id_min + 1;
+  buffer_table_size_new = (buffer_id_max - buffer_id_min) + 1;
   buffer_table_new = malloc(sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1));
+  // fprintf(stderr, "smal_buffer_table_add(%p): malloc(%lu) = %p\n", self, (unsigned long) (sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1)), buffer_table_new);
   memset(buffer_table_new, 0, sizeof(buffer_table_new[0]) * (buffer_table_size_new + 2));
 
   if ( buffer_table ) {
@@ -227,8 +239,10 @@ void smal_buffer_table_add(smal_buffer *self)
       assert(! buffer_table_new[j]);
       buffer_table_new[j] = x;
     }
+    // fprintf(stderr, "smal_buffer_table_add(%p): free(%p)\n", self, buffer_table);
     free(buffer_table);
   }
+
   buffer_table = buffer_table_new;
   buffer_table_size = buffer_table_size_new;
 
@@ -375,19 +389,6 @@ void smal_buffer_dealloc(smal_buffer *self)
 #define smal_buffer_mark(BUF, PTR)				\
   smal_bitmap_set_c(&(BUF)->mark_bits, smal_buffer_i(BUF, PTR))
 
-
-static
-void smal_buffer_clear_mark_bits(smal_buffer *self)
-{
-  smal_bitmap_init(&self->mark_bits);
-}
-
-static
-void smal_buffer_free_mark_bits(smal_buffer *self)
-{
-  smal_bitmap_free(&self->mark_bits);
-}
-
 static
 int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
 {
@@ -442,8 +443,8 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
 	    (unsigned long) self->mark_bits.size);
 
   if ( result < 0 ) {
-    smal_bitmap_init(&self->mark_bits);
-    smal_bitmap_init(&self->free_bits);
+    smal_bitmap_free(&self->mark_bits);
+    smal_bitmap_free(&self->free_bits);
   }
 
   return result;
@@ -624,7 +625,11 @@ void smal_buffer_sweep(smal_buffer *self)
 	      self->stats.live_n, self->stats.free_n);
     assert(self->mark_bits.set_n == self->stats.live_n);
 
-    smal_buffer_free_mark_bits(self);
+#ifndef SMAL_PROF
+#if SMAL_FREE_MARK_BITS
+    smal_bitmap_free(&self->mark_bits);
+#endif
+#endif
 
     self->type->stats.live_n += self->stats.live_n;
     buffer_head.stats.live_n += self->stats.live_n;
@@ -645,7 +650,11 @@ void smal_buffer_sweep(smal_buffer *self)
 static
 void smal_buffer_pre_mark(smal_buffer *self)
 {
-  smal_buffer_clear_mark_bits(self);
+#if SMAL_FREE_MARK_BITS
+  smal_bitmap_init(&self->mark_bits);
+#endif
+  /* Clear mark bits. */
+  smal_bitmap_clr_all(&self->mark_bits);
 
   /* Prepare to re-compute live_n. */
   self->type->stats.live_n -= self->stats.live_n;
