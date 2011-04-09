@@ -23,6 +23,18 @@ static void my_cons_mark (void *ptr)
   smal_mark_ptr(((my_cons *) ptr)->cdr);
 }
 
+static
+void my_print_stats()
+{
+  smal_stats stats = { 0 };
+  int i;
+
+  smal_global_stats(&stats);
+  for ( i = 0; i < sizeof(stats)/sizeof(stats.alloc_id); ++ i ) {
+    fprintf(stdout, "  %d %lu\n", i, ((unsigned long*) &stats)[i]);
+  }
+}
+
 void smal_mark_roots()
 {
   smal_roots_mark_chain(0);
@@ -51,7 +63,7 @@ int main(int argc, char **argv)
     int action = rand() % 10;
     x = smal_alloc(my_cons_type);
     ++ smal_alloc_n;
-
+    
     x->car = x->cdr = 0;
     
     switch ( action ) {
@@ -77,36 +89,44 @@ int main(int argc, char **argv)
     fflush(stderr);
 #endif
 
-    if ( rand() % 10 == 0 ) {
+    if ( rand() % 100 == 0 ) {
       // fprintf(stderr, "\nGC\n");
       smal_collect();
       ++ smal_collect_n;
+      // my_print_stats();
     }
     
-    if ( rand() % 10 == 1 ) {
+    if ( rand() % 100 == 50 ) {
       int obj_count = 0;
       smal_each_object(my_count_object, &obj_count);
       ++ smal_each_object_n;
+      // my_print_stats();
       // fprintf(stderr, "  object_count = %d\n", obj_count);
     }
   }
-}
-x = y = 0;
-smal_collect();
 
-{
-  char cmd[1024];
-  sprintf(cmd, "/bin/ps -l -p %d", getpid());
-  system(cmd);
-}
+  my_print_stats();
+  
+  x = y = 0;
+  smal_collect();
 
-smal_shutdown();
+  smal_roots_end();
 
-fprintf(stdout, "\nOK\n");
-fprintf(stdout, "%lu smal_alloc\n", smal_alloc_n);
-fprintf(stdout, "%lu smal_each_object\n", smal_each_object_n);
-fprintf(stdout, "%lu smal_collect\n", smal_collect_n);
-
+  {
+    char cmd[1024];
+    sprintf(cmd, "/bin/ps -l -p %d", getpid());
+    system(cmd);
+  }
+  
+  my_print_stats();
+  
+  smal_shutdown();
+  
+  fprintf(stdout, "\nOK\n");
+  fprintf(stdout, "%lu smal_alloc\n", smal_alloc_n);
+  fprintf(stdout, "%lu smal_each_object\n", smal_each_object_n);
+  fprintf(stdout, "%lu smal_collect\n", smal_collect_n);
+  
   return 0;
 }
 

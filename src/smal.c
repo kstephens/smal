@@ -234,14 +234,16 @@ void smal_buffer_table_add(smal_buffer *self)
   buffer_table_size_new = (buffer_id_max - buffer_id_min) + 1;
   buffer_table_new = malloc(sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1));
   // fprintf(stderr, "smal_buffer_table_add(%p): malloc(%lu) = %p\n", self, (unsigned long) (sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1)), buffer_table_new);
-  memset(buffer_table_new, 0, sizeof(buffer_table_new[0]) * (buffer_table_size_new + 2));
+  memset(buffer_table_new, 0, sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1));
 
   if ( buffer_table ) {
     for ( i = 0; i < buffer_table_size; ++ i ) {
       smal_buffer *x = buffer_table[i];
-      size_t j = x->buffer_id % buffer_table_size_new;
-      assert(! buffer_table_new[j]);
-      buffer_table_new[j] = x;
+      if ( x ) {
+	size_t j = x->buffer_id % buffer_table_size_new;
+	assert(! buffer_table_new[j]);
+	buffer_table_new[j] = x;
+      }
     }
     // fprintf(stderr, "smal_buffer_table_add(%p): free(%p)\n", self, buffer_table);
     free(buffer_table);
@@ -337,6 +339,9 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
     smal_buffer_table_add(self);
   }
 
+  ++ self->type->stats.buffer_n;
+  ++ buffer_head.stats.buffer_n;
+
   smal_debug(1, "() = %p", (void*) self);
 
   return self;
@@ -353,8 +358,9 @@ void smal_buffer_free(smal_buffer *self)
   smal_debug(1, "(%p)", self);
 
   if ( self->type ) {
-    if ( self->type->alloc_buffer )
+    if ( self->type->alloc_buffer == self )
       self->type->alloc_buffer = 0;
+    self->type->stats.buffer_n -= 1;
     self->type->stats.alloc_n -= self->stats.alloc_n;
     self->type->stats.avail_n -= self->stats.avail_n;
     self->type->stats.free_n  -= self->stats.free_n;
@@ -371,6 +377,8 @@ void smal_buffer_free(smal_buffer *self)
   buffer_head.stats.avail_n -= self->stats.avail_n;
   assert(buffer_head.stats.free_n  >= self->stats.free_n);
   buffer_head.stats.free_n  -= self->stats.free_n;
+
+  buffer_head.stats.buffer_n -= 1;
 
   result = munmap(addr, size);
   smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) addr, (unsigned long) size, (int) result);
@@ -554,6 +562,10 @@ void *smal_buffer_alloc_object(smal_buffer *self)
   }
 
   if ( ptr ) {
+    ++ self->stats.alloc_id;
+    ++ self->type->stats.alloc_id;
+    ++ buffer_head.stats.alloc_id;
+
     ++ self->stats.live_n;
     assert(self->stats.avail_n);
     ++ self->type->stats.live_n;
@@ -601,6 +613,10 @@ void smal_buffer_free_object(smal_buffer *self, void *ptr)
   ++ self->type->stats.avail_n;
   ++ buffer_head.stats.avail_n;
 
+  ++ self->stats.free_id;
+  ++ self->type->stats.free_id;
+  ++ buffer_head.stats.free_id;
+  
   smal_debug(4, "%p: (%p)", self, ptr);
   smal_debug(4, "  alloc_ptr = %p, stats.alloc_n = %d", self->alloc_ptr, self->stats.alloc_n);
   smal_debug(4, "  stats.free_n = %d, stats.avail_n = %d, stats.live_n = %d",
@@ -647,6 +663,8 @@ void smal_buffer_sweep(smal_buffer *self)
 	self->type->free_func(ptr);
       }
     }
+    self->type->stats.free_id += self->stats.alloc_n - self->stats.free_n;
+    buffer_head.stats.free_id += self->stats.alloc_n - self->stats.free_n;
     smal_buffer_free(self);
   }
 }
@@ -844,6 +862,11 @@ void smal_free(void *ptr)
       smal_debug(6, "ptr %p is valid in buf %p", ptr, buf);
       smal_buffer_free_object(buf, ptr);
     }
+#if 0
+    /* HAVE NOT FULLY MARKED! */
+    if ( ! buf->stats.live_n )
+      smal_buffer_free(buf);
+#endif
   }
 }
 
@@ -898,3 +921,14 @@ void smal_shutdown()
 
   inited = 0;
 }
+
+void smal_global_stats(smal_stats *stats)
+{
+  *stats = buffer_head.stats;
+}
+
+void smal_type_stats(smal_type *type, smal_stats *stats)
+{
+  *stats = type->stats;
+}
+
