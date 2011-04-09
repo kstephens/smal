@@ -663,8 +663,14 @@ void smal_buffer_sweep(smal_buffer *self)
 	self->type->free_func(ptr);
       }
     }
-    self->type->stats.free_id += self->stats.alloc_n - self->stats.free_n;
-    buffer_head.stats.free_id += self->stats.alloc_n - self->stats.free_n;
+
+    /* Update free_id by the number actually sweeped. */
+    {
+      size_t sweep_n = self->stats.alloc_n - self->stats.free_n;
+      self->stats.free_id       += sweep_n;
+      self->type->stats.free_id += sweep_n;
+      buffer_head.stats.free_id += sweep_n;
+    }
     smal_buffer_free(self);
   }
 }
