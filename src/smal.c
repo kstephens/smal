@@ -28,18 +28,22 @@
 #define smal_buffer_object_alignment(buf) smal_buffer_object_size(buf)
 #endif
 
-#define smal_buffer_size (4 * 4 * 1024)
+#ifndef smal_buffer_size_default
+#define smal_buffer_size_default (4 * 4 * 1024)
+#endif
+
+#define smal_buffer_size smal_buffer_size_default
 #define smal_buffer_mask (smal_buffer_size - 1)
 
 #ifdef smal_buffer_size
 size_t _smal_buffer_size = smal_buffer_size;
 #else
-size_t smal_buffer_size = 4 * 4 * 1024;
+size_t smal_buffer_size = smal_buffer_size_default;
 #endif
 #ifdef smal_buffer_mask
 size_t _smal_buffer_mask = smal_buffer_mask;
 #else
-size_t smal_buffer_mask = (4 * 4 * 1024) - 1;
+size_t smal_buffer_mask = smal_buffer_size_default - 1;
 #endif
 
 
