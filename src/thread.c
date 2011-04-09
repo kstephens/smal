@@ -13,6 +13,30 @@
 
 static smal_thread thread_main;
 
+static
+int _smal_thread_getstack_main(smal_thread *t, void **addrp, size_t *sizep)
+{
+  extern char **environ;
+  void *bottom_of_stack = environ; /* HACK */
+  void *top_of_stack = alloca(0);
+  static size_t page_align = 4095;
+
+  /* COMMON: x86, 68x, etc. */
+  if ( top_of_stack < bottom_of_stack ) {
+    bottom_of_stack += page_align - 1;
+    smal_ALIGN(bottom_of_stack, page_align);
+    *addrp = top_of_stack;
+    *sizep = bottom_of_stack - top_of_stack;
+  } else {
+    bottom_of_stack -= page_align - 1;
+    smal_ALIGN(bottom_of_stack, page_align);
+    *addrp = bottom_of_stack;
+    *sizep = top_of_stack - bottom_of_stack;
+  }
+  fprintf(stderr, "  %p getstack: %p[0x%lx] %p\n", t, *addrp, (unsigned long) *sizep, *addrp + *sizep);
+  return 0;
+}
+
 #if SMAL_PTHREAD
 
 static smal_thread thread_list;
@@ -21,7 +45,8 @@ static pthread_key_t roots_key;
 
 static pthread_mutex_t thread_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// static
+#if 0
+static
 void thread_exit(void *arg)
 {
   smal_thread *t = arg;
@@ -31,6 +56,7 @@ void thread_exit(void *arg)
   free(t);
   pthread_mutex_unlock(&thread_list_mutex);
 }
+#endif
 
 static
 void thread_init(smal_thread *t)
@@ -72,7 +98,9 @@ void thread_child()
   // fprintf(stderr, "  thread_child() %p = %p\n", (void*) pthread_self(), t);
 }
 
-void smal_thread_init()
+static pthread_once_t _smal_thread_is_initialized = PTHREAD_ONCE_INIT;
+static
+void _smal_thread_init()
 {
   if ( ! roots_key ) {
     pthread_mutex_init(&thread_list_mutex, 0);
@@ -90,7 +118,13 @@ void smal_thread_init()
 
     thread_init(&thread_main);
   }
+}
 
+void smal_thread_init()
+{
+  if ( ! roots_key ) { /* fast unsafe lock */
+    (void) pthread_once(&_smal_thread_is_initialized, _smal_thread_init);
+  }
 }
 
 smal_thread *smal_thread_self()
@@ -108,6 +142,12 @@ smal_thread *smal_thread_self()
     // fprintf(stderr, "smal_thread_self() = %p: %p\n", t, (void*) t->thread);
     return t;
   }
+}
+
+int smal_thread_getstack(smal_thread *t, void **addrp, size_t *sizep)
+{
+  // FIXME: // return pthread_getstack(t->thread, addrp, sizep);
+  return _smal_thread_getstack_main(t, addrp, sizep);
 }
 
 void smal_thread_each(void (*func)(smal_thread *t, void *arg), void *arg)
@@ -137,6 +177,12 @@ void smal_thread_init()
 smal_roots *smal_roots_self()
 {
   return &thread_main;
+}
+
+int smal_thread_getstack(smal_thread *t, void **addrp, size_t *sizep)
+{
+  assert(t == &thread_main);
+  return _smal_thread_getstack_main(t, addrp, sizep);
 }
 
 void smal_thread_each(void (*func)(smal_thread *t, void *arg), void *arg)
