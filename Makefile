@@ -5,6 +5,7 @@ INC_DIR=include/#
 
 CFLAGS_OPT = -O2 #
 CFLAGS_OPT = -O3 #
+#CFLAGS_OPT = #
 CFLAGS_PROF = -pg -DSMAL_PROF #
 CFLAGS_PROF = #
 PTHREAD_CFLAGS = -DSMAL_PTHREAD=1 #
@@ -39,3 +40,9 @@ test : all $(TESTS_T)
 	  $$t || gdb --args $$t ;\
 	done
  
+valgrind : all $(TEST_T)
+	set -ex ;\
+	for t in $(TESTS_T) ;\
+	do \
+	  valgrind $$t || gdb --args $$t ;\
+	done
