@@ -20,13 +20,17 @@ This is achieved by <code>mmap()</code>ing <code>smal_buffer_size * 2</code> byt
 
 == Object Allocation ==
 
-Objects are parceled, on-demand, from a <code>smal_buffer</code>, by incrementing <code>alloc_ptr</code> by the <code>smal_type</code>'s fixed object size, <code>object_size</code>, starting at <code>begin_ptr</code> and terminating at <code>end_ptr</code>.
+Objects are allocated by <code>smal_alloc(smal_type*)</code>.   Note: objects are allocated by type, not size.
+
+Objects are parceled, on-demand, from a <code>smal_buffer</code>, by incrementing <code>alloc_ptr</code> by the <code>smal_type</code>'s fixed object size, <code>object_size</code>, starting at <code>begin_ptr</code> and terminating at <code>end_ptr</code>.  
+
 
 == Object Reclaimation ==
 
 Each <code>smal_buffer</code> keeps its own <code>free_list</code>.  
 A free bitmap is also maintained to avoid double-free during sweep.
 <code>smal_buffers</code> without active objects are <code>munmap</code>ed and returned to the OS after <code>smal_collect()</code>.
+Objects can be explicitly freed by <code>smal_free</code>.
 
 == Allocation Scheduling ==
 
