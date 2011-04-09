@@ -297,8 +297,7 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
 {
   smal_buffer *self;
 
-  /* mmap() enough to ensure a buffer of smal_buffer_size, aligned to smal_buffer_size */
-  size_t size = smal_buffer_size * 2; 
+  size_t size;
   void *addr;
   size_t offset;
   void *keep_addr = 0, *free_addr = 0;
@@ -307,7 +306,7 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
   
   smal_debug(1, "()");
 
-  /* Attempt first alignment. */
+  /* Attempt first alignment via exact size. */
   size = smal_buffer_size;
   addr = mmap((void*) 0, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, (off_t) 0);
   smal_debug(2, " mmap(..., 0x%lx) = %p", (unsigned long) size, (void*) addr);
@@ -326,6 +325,7 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
     fprintf(stderr, "mmap retry, %p not aligned to 0x%lx\n", addr, (unsigned long) smal_buffer_size);
 #endif
 
+    /* mmap() enough to ensure a buffer of smal_buffer_size, aligned to smal_buffer_size */
     /* Allocate twice the size needed. */
     size = smal_buffer_size * 2;
     addr = mmap((void*) 0, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, (off_t) 0);
