@@ -280,7 +280,7 @@ void smal_buffer_table_remove(smal_buffer *self)
 
   smal_DLLIST_DELETE(self);
 
-  /* Readjust buffer_table window. */
+  /* Adjust buffer_table window. */
   if ( buffer_id_min == self->buffer_id || buffer_id_max == self->buffer_id ) {
     buffer_id_min = buffer_id_max = 0;
   }
