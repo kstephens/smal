@@ -243,8 +243,10 @@ void smal_buffer_table_add(smal_buffer *self)
   buffer_table_new = malloc(sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1));
   memset(buffer_table_new, 0, sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1));
 
-  // fprintf(stderr, "%lu buffer_id %lu @ %p [%lu, %lu]\n", (unsigned long) buffer_head.stats.buffer_n, (unsigned long) self->buffer_id, self, (unsigned long) buffer_id_min, (unsigned long) buffer_id_max);
-  // fprintf(stderr, "smal_buffer_table_add(%p): malloc([%lu]) = %p\n", self, (unsigned long) buffer_table_size_new, buffer_table_new);
+#if 0
+  fprintf(stderr, "smal_buffer_table_add(%p): malloc([%lu]) = %p\n", self, (unsigned long) buffer_table_size_new, buffer_table_new);
+  fprintf(stderr, "  %lu buffer_id %lu @ %p [%lu, %lu] %lu\n", (unsigned long) buffer_head.stats.buffer_n, (unsigned long) self->buffer_id, self, (unsigned long) buffer_id_min, (unsigned long) buffer_id_max, (unsigned long) buffer_table_size_new);
+#endif
 
   if ( buffer_table ) {
     for ( i = 0; i < buffer_table_size; ++ i ) {
@@ -299,12 +301,14 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
   size_t size = smal_buffer_size * 2; 
   void *addr;
   size_t offset;
-  void *keep_addr, *free_addr;
-  size_t keep_size, free_size;
+  void *keep_addr = 0, *free_addr = 0;
+  size_t keep_size = 0, free_size = 0;
   int result;
   
   smal_debug(1, "()");
 
+  /* Attempt first alignment. */
+  size = smal_buffer_size;
   addr = mmap((void*) 0, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, (off_t) 0);
   smal_debug(2, " mmap(..., 0x%lx) = %p", (unsigned long) size, (void*) addr);
 
@@ -313,31 +317,53 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
     return 0;
   }
 
+  /* Not aligned? */
   if ( (offset = smal_buffer_offset(addr)) ) {
-    smal_debug(3, "offset %p = 0x%0lx", (void*) addr, (unsigned long) offset);
-    free_addr = addr;
-    keep_addr = addr + (smal_buffer_size - offset);
-    free_size = keep_addr - addr;
-    keep_size = smal_buffer_size;
-    assert(keep_addr == free_addr + free_size);
-  } else {
-    keep_addr = addr;
-    keep_size = smal_buffer_size;
-    free_addr = addr + smal_buffer_size;
-    free_size = size - keep_size;
+    result = munmap(addr, size);
+    smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) addr, (unsigned long) size, (int) result);
+
+#if 0
+    fprintf(stderr, "mmap retry, %p not aligned to 0x%lx\n", addr, (unsigned long) smal_buffer_size);
+#endif
+
+    /* Allocate twice the size needed. */
+    size = smal_buffer_size * 2;
+    addr = mmap((void*) 0, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, (off_t) 0);
+    smal_debug(2, " mmap(..., 0x%lx) = %p", (unsigned long) size, (void*) addr);
+    
+    if ( addr == MAP_FAILED ) {
+      smal_debug(3, "mmap failed: %s", strerror(errno));
+      return 0;
+    }
+    
+    if ( (offset = smal_buffer_offset(addr)) ) {
+      smal_debug(3, "offset %p = 0x%0lx", (void*) addr, (unsigned long) offset);
+      free_addr = addr;
+      keep_addr = addr + (smal_buffer_size - offset);
+      free_size = keep_addr - addr;
+      keep_size = smal_buffer_size;
+      assert(keep_addr == free_addr + free_size);
+    } else {
+      keep_addr = addr;
+      keep_size = smal_buffer_size;
+      free_addr = addr + smal_buffer_size;
+      free_size = size - keep_size;
+    }
+    
+    smal_debug(3, "keeping %p[0x%0lx]", (void*) keep_addr, (unsigned long) keep_size);
+    smal_debug(3, "freeing %p[0x%0lx]", (void*) free_addr, (unsigned long) free_size);
+    
+    assert(keep_addr >= addr);
+    assert(keep_addr + keep_size <= addr + size);
+    
+    /* Return the unused, unaligned half. */
+    result = munmap(free_addr, free_size);
+    smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) free_addr, (unsigned long) free_size, (int) result);
+
+    addr = keep_addr;
   }
-  
-  smal_debug(3, "keeping %p[0x%0lx]", (void*) keep_addr, (unsigned long) keep_size);
-  smal_debug(3, "freeing %p[0x%0lx]", (void*) free_addr, (unsigned long) free_size);
 
-  assert(keep_addr >= addr);
-  assert(keep_addr + keep_size <= addr + size);
-
-  /* Return the unused, unaligned half. */
-  result = munmap(free_addr, free_size);
-  smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) free_addr, (unsigned long) free_size, (int) result);
-
-  self = keep_addr;
+  self = addr;
   memset(self, 0, sizeof(*self));
 
   self->next = self->prev = 0;
