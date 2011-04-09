@@ -20,6 +20,11 @@ static void print_thread(smal_thread *t, void *arg)
 static void* thread_func(void *arg)
 {
   fprintf(stderr, "  child thread %p pthread %p \n", smal_thread_self(), (void*) pthread_self());
+  {
+    void *stack_ptr = 0; 
+    size_t stack_size = 0;
+    smal_thread_getstack(smal_thread_self(), &stack_ptr, &stack_size);
+  }
   smal_thread_each(print_thread, 0);
   fprintf(stderr, "  child exiting\n");
   sleep(1);
@@ -34,6 +39,12 @@ int main()
 #endif
 
   smal_thread_init();
+
+  {
+    void *stack_ptr = 0; 
+    size_t stack_size = 0;
+    smal_thread_getstack(smal_thread_self(), &stack_ptr, &stack_size);
+  }
 
 #if SMAL_PTHREAD
   fprintf(stderr, "  parent thread %p = pthread %p\n", smal_thread_self(), (void*) pthread_self());
