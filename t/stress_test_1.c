@@ -36,7 +36,7 @@ void my_count_object(smal_type *type, void *ptr, void *arg)
 int main(int argc, char **argv)
 {
   unsigned long 
-    smal_type_alloc_n = 0, 
+    smal_alloc_n = 0, 
     smal_each_object_n = 0, 
     smal_collect_n = 0;
 
@@ -48,8 +48,8 @@ int main(int argc, char **argv)
   
   for ( alloc_id = 0; alloc_id < 10000000; ++ alloc_id ) {
     int action = rand() % 10;
-    x = smal_type_alloc(my_cons_type);
-    ++ smal_type_alloc_n;
+    x = smal_alloc(my_cons_type);
+    ++ smal_alloc_n;
 
     x->car = x->cdr = 0;
     
@@ -93,8 +93,10 @@ int main(int argc, char **argv)
 x = y = 0;
 smal_collect();
 
+smal_shutdown();
+
 fprintf(stdout, "\nOK\n");
-fprintf(stdout, "%lu smal_type_alloc\n", smal_type_alloc_n);
+fprintf(stdout, "%lu smal_alloc\n", smal_alloc_n);
 fprintf(stdout, "%lu smal_each_object\n", smal_each_object_n);
 fprintf(stdout, "%lu smal_collect\n", smal_collect_n);
 

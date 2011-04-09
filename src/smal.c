@@ -340,7 +340,7 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
 
 
 static 
-void smal_buffer_dealloc(smal_buffer *self)
+void smal_buffer_free(smal_buffer *self)
 {
   int result;
   void *addr = self->mmap_addr; 
@@ -643,7 +643,7 @@ void smal_buffer_sweep(smal_buffer *self)
 	self->type->free_func(ptr);
       }
     }
-    smal_buffer_dealloc(self);
+    smal_buffer_free(self);
   }
 }
 
@@ -759,6 +759,18 @@ smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free
   return type;
 }
 
+void smal_type_free(smal_type *self)
+{
+  smal_buffer *buf;
+
+  smal_DLLIST_each(&buffer_head, buf) {
+    if ( buf->type == self )
+      smal_buffer_free(buf);
+  } smal_DLLIST_each_END();
+
+  smal_DLLIST_DELETE(self);
+  free(self);
+}
 
 static
 smal_buffer *smal_type_find_alloc_buffer(smal_type *self)
@@ -794,7 +806,7 @@ smal_buffer *smal_type_alloc_buffer(smal_type *self)
   return self->alloc_buffer;
 }
 
-void *smal_type_alloc(smal_type *self)
+void *smal_alloc(smal_type *self)
 {
   void *ptr;
 
@@ -818,7 +830,7 @@ void *smal_type_alloc(smal_type *self)
   return ptr;
 }
 
-void smal_type_free(void *ptr)
+void smal_free(void *ptr)
 {
   smal_buffer *buf;
   if ( (buf = smal_ptr_to_buffer(ptr)) ) {
@@ -854,3 +866,31 @@ void smal_each_object(void (*func)(smal_type *type, void *ptr, void *arg), void 
   -- no_gc;
 }
 
+void smal_shutdown()
+{
+  smal_buffer *buf;
+  smal_type *type;
+
+  if ( ! inited )
+    return;
+
+  if ( in_gc )
+    abort();
+
+  ++ no_gc;
+
+  smal_DLLIST_each(&buffer_head, buf) {
+    smal_buffer_free(buf);
+  } smal_DLLIST_each_END();
+
+  smal_DLLIST_each(&type_head, type) {
+    smal_type_free(type);
+  } smal_DLLIST_each_END();
+
+  free(buffer_table);
+  buffer_table = 0;
+
+  -- no_gc;
+
+  inited = 0;
+}

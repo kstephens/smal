@@ -39,8 +39,8 @@ int main()
   smal_roots_2(x, y);
 
   my_cons_type = smal_type_for(sizeof(my_cons), my_cons_mark, 0);
-  x = smal_type_alloc(my_cons_type);
-  y = smal_type_alloc(my_cons_type);
+  x = smal_alloc(my_cons_type);
+  y = smal_alloc(my_cons_type);
   x->car = (my_oop) 1;
   x->cdr = y;
   y->car = (my_oop) 2;
