@@ -7,6 +7,7 @@
 #include "smal/explicit_roots.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h> /* getpid() */
 #include <assert.h>
 
 typedef void *my_oop;
@@ -92,6 +93,12 @@ int main(int argc, char **argv)
 }
 x = y = 0;
 smal_collect();
+
+{
+  char cmd[1024];
+  sprintf(cmd, "/bin/ps -l -p %d", getpid());
+  system(cmd);
+}
 
 smal_shutdown();
 
