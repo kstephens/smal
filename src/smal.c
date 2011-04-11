@@ -111,9 +111,19 @@ void smal_bitmap_free(smal_bitmap *self)
 #define smal_bitmap_b(bm, i) (1 << ((i) % smal_BITS_PER_WORD))
 #define smal_bitmap_setQ(bm, i) (smal_bitmap_w(bm, i) & smal_bitmap_b(bm, i))
 #define smal_bitmap_set(bm, i) (smal_bitmap_w(bm, i) |= smal_bitmap_b(bm, i))
-#define smal_bitmap_set_c(bm, i) smal_bitmap_set(bm, i); (bm)->set_n ++; (bm)->clr_n --; 
+#define smal_bitmap_set_c(bm, i) \
+  do { \
+    smal_bitmap_set(bm, i); \
+    (bm)->set_n ++; \
+    (bm)->clr_n --; \
+  } while ( 0 )
 #define smal_bitmap_clr(bm, i) (smal_bitmap_w(bm, i) &= ~ smal_bitmap_b(bm, i))
-#define smal_bitmap_clr_c(bm, i) smal_bitmap_clr(bm, i); (bm)->set_n --; (bm)->clr_n ++;
+#define smal_bitmap_clr_c(bm, i)		\
+  do {						\
+    smal_bitmap_clr(bm, i);			\
+    (bm)->set_n --;				\
+    (bm)->clr_n ++;				\
+  } while ( 0 )
 
 /*********************************************************************
  * Debugging support.
@@ -140,8 +150,8 @@ void _smal_debug(const char *func, const char *format, ...)
 
 #define smal_debug(level, msg, args...)		\
   do {						\
-  if ( smal_debug_level >= level ) 		\
-    _smal_debug(__FUNCTION__, msg, ##args);	\
+    if ( smal_debug_level >= level ) 		\
+      _smal_debug(__FUNCTION__, msg, ##args);	\
   } while(0)
 #else
 #define smal_debug(level, msg, args...) (void)0
@@ -292,6 +302,13 @@ void smal_buffer_table_remove(smal_buffer *self)
 static
 int smal_buffer_set_object_size(smal_buffer *self, size_t object_size);
 
+#define smal_UPDATE_STATS(N, EXPR)	\
+  do {					\
+    buffer_head.stats.N EXPR;		\
+    self->type->stats.N EXPR;		\
+    self->stats.N EXPR;			\
+  } while ( 0 )
+
 static 
 smal_buffer *smal_buffer_alloc(smal_type *type)
 {
@@ -380,8 +397,7 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
     smal_buffer_table_add(self);
   }
 
-  ++ self->type->stats.buffer_n;
-  ++ buffer_head.stats.buffer_n;
+  smal_UPDATE_STATS(buffer_n, += 1);
 
   smal_debug(1, "() = %p", (void*) self);
 
@@ -482,9 +498,7 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
     goto done;
   }
 
-  self->stats.avail_n = self->object_capacity;
-  self->type->stats.avail_n += self->stats.avail_n;
-  buffer_head.stats.avail_n += self->stats.avail_n;
+  smal_UPDATE_STATS(avail_n, += self->object_capacity);
 
  done:
   smal_debug(2, "  object_size = %d, object_alignment = %d",
@@ -586,39 +600,26 @@ void *smal_buffer_alloc_object(smal_buffer *self)
     self->free_list = * (void**) ptr;
     smal_bitmap_clr_c(&self->free_bits, smal_buffer_i(self, ptr));
 
-    -- self->stats.free_n;
-    -- self->type->stats.free_n;
     assert(buffer_head.stats.free_n > 0);
-    -- buffer_head.stats.free_n;
+    smal_UPDATE_STATS(free_n, -= 1);
   } else if ( self->alloc_ptr < self->end_ptr ) {
 
     ptr = self->alloc_ptr;
     self->alloc_ptr += smal_buffer_object_size(self);
 
-    ++ self->stats.alloc_n;
-    ++ self->type->stats.alloc_n;
-    ++ buffer_head.stats.alloc_n;
+    smal_UPDATE_STATS(alloc_n, += 1);
   } else {
     ptr = 0;
   }
 
   if ( ptr ) {
-    ++ self->stats.alloc_id;
-    ++ self->type->stats.alloc_id;
-    ++ buffer_head.stats.alloc_id;
-
-    ++ self->stats.live_n;
-    ++ self->type->stats.live_n;
-    ++ buffer_head.stats.live_n;
-
-    -- self->stats.avail_n;
-    -- self->type->stats.avail_n;
+    smal_UPDATE_STATS(alloc_id, += 1);
+    smal_UPDATE_STATS(live_n, += 1);
     assert(buffer_head.stats.avail_n);
-    -- buffer_head.stats.avail_n;
+    smal_UPDATE_STATS(avail_n, -= 1);
 
-    if ( in_gc ) {
+    if ( in_gc )
       smal_buffer_mark(self, ptr);
-    }
   }
 
   smal_debug(4, "(%p) = %p", self, ptr);
@@ -642,19 +643,10 @@ void smal_buffer_free_object(smal_buffer *self, void *ptr)
   * ((void**) ptr) = self->free_list;
   self->free_list = ptr;
 
-  ++ self->stats.free_n;
-  ++ self->type->stats.free_n;
-  ++ buffer_head.stats.free_n;
+  smal_UPDATE_STATS(free_n, += 1);
   assert(buffer_head.stats.free_n);
-
-  ++ self->stats.avail_n;
-  ++ self->type->stats.avail_n;
-  ++ buffer_head.stats.avail_n;
-  assert(buffer_head.stats.avail_n);
-
-  ++ self->stats.free_id;
-  ++ self->type->stats.free_id;
-  ++ buffer_head.stats.free_id;
+  smal_UPDATE_STATS(avail_n, += 1);
+  smal_UPDATE_STATS(free_id, += 1);
   
   smal_debug(4, "%p: (%p)", self, ptr);
   smal_debug(4, "  alloc_ptr = %p, stats.alloc_n = %d", self->alloc_ptr, self->stats.alloc_n);
@@ -706,9 +698,7 @@ void smal_buffer_sweep(smal_buffer *self)
     /* Update free_id by the number actually sweeped. */
     {
       size_t sweep_n = self->stats.alloc_n - self->stats.free_n;
-      self->stats.free_id       += sweep_n;
-      self->type->stats.free_id += sweep_n;
-      buffer_head.stats.free_id += sweep_n;
+      smal_UPDATE_STATS(free_id, += sweep_n);
     }
     smal_buffer_free(self);
   }
@@ -724,9 +714,7 @@ void smal_buffer_pre_mark(smal_buffer *self)
   smal_bitmap_clr_all(&self->mark_bits);
 
   /* Prepare to re-compute live_n. */
-  self->type->stats.live_n -= self->stats.live_n;
-  buffer_head.stats.live_n -= self->stats.live_n;
-  self->stats.live_n = 0;
+  smal_UPDATE_STATS(live_n, -= self->stats.live_n);
 }
 
 
