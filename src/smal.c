@@ -235,12 +235,12 @@ void smal_buffer_table_add(smal_buffer *self)
   if ( buffer_id_min == 0 && buffer_id_max == 0 ) {
     smal_buffer *buf;
     buffer_id_min = buffer_id_max = self->buffer_id;
-    smal_DLLIST_each(&buffer_head, buf) {
+    smal_dllist_each(&buffer_head, buf) {
       if ( buffer_id_min > buf->buffer_id )
 	buffer_id_min = buf->buffer_id;
       if ( buffer_id_max < buf->buffer_id )
 	buffer_id_max = buf->buffer_id;
-    } smal_DLLIST_each_END();
+    } smal_dllist_each_end();
 
   } else {
     if ( buffer_id_min > self->buffer_id )
@@ -278,7 +278,7 @@ void smal_buffer_table_add(smal_buffer *self)
   assert(! buffer_table[i]);
   buffer_table[i] = self;
 
-  smal_DLLIST_INSERT(&buffer_head, self);
+  smal_dllist_insert(&buffer_head, self);
 
   smal_debug(3, "buffer_table_size = %d", (int) buffer_table_size);
 }
@@ -290,7 +290,7 @@ void smal_buffer_table_remove(smal_buffer *self)
   assert(buffer_table[i] == self);
   buffer_table[i] = 0;
 
-  smal_DLLIST_DELETE(self);
+  smal_dllist_delete(self);
 
   /* Adjust buffer_table window. */
   if ( buffer_id_min == self->buffer_id || buffer_id_max == self->buffer_id ) {
@@ -728,15 +728,15 @@ void smal_collect()
 
   in_gc = 1;
 
-  smal_DLLIST_each(&buffer_head, buf) {
+  smal_dllist_each(&buffer_head, buf); {
     smal_buffer_pre_mark(buf);
-  } smal_DLLIST_each_END();
+  } smal_dllist_each_end();
 
   smal_mark_roots();
 
-  smal_DLLIST_each(&buffer_head, buf) {
+  smal_dllist_each(&buffer_head, buf); {
     smal_buffer_sweep(buf);
-  } smal_DLLIST_each_END();
+  } smal_dllist_each_end();
 
   in_gc = 0;
   smal_debug(1, "  stats.alloc_n = %d, stats.live_n = %d, stats.avail_n = %d, stats.free_n = %d",
@@ -761,13 +761,11 @@ void smal_init()
     }
   }
 
-  if ( ! buffer_head.next ) {
-    smal_DLLIST_INIT(&buffer_head);
-  }
+  if ( ! buffer_head.next )
+    smal_dllist_init(&buffer_head);
 
-  if ( ! type_head.next ) { 
-    smal_DLLIST_INIT(&type_head);
-  }
+  if ( ! type_head.next ) 
+    smal_dllist_init(&type_head);
 
   inited = 1;
 }
@@ -795,13 +793,13 @@ smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free
   if ( ! free_func )
     free_func = null_func;
 
-  smal_DLLIST_each(&type_head, type) {
+  smal_dllist_each(&type_head, type); {
     if ( type->object_size == object_size && 
 	 type->mark_func == mark_func &&
 	 type->free_func == free_func ) {
       return type;
     }
-  } smal_DLLIST_each_END();
+  } smal_dllist_each_end();
 
   type = malloc(sizeof(*type));
   memset(type, 0, sizeof(*type));
@@ -809,7 +807,7 @@ smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free
   type->object_size = object_size;
   type->mark_func = mark_func;
   type->free_func = free_func;
-  smal_DLLIST_INSERT(&type_head, type);
+  smal_dllist_insert(&type_head, type);
 
   return type;
 }
@@ -818,12 +816,12 @@ void smal_type_free(smal_type *self)
 {
   smal_buffer *buf;
 
-  smal_DLLIST_each(&buffer_head, buf) {
+  smal_dllist_each(&buffer_head, buf); {
     if ( buf->type == self )
       smal_buffer_free(buf);
-  } smal_DLLIST_each_END();
+  } smal_dllist_each_end();
 
-  smal_DLLIST_DELETE(self);
+  smal_dllist_delete(self);
   free(self);
 }
 
@@ -834,12 +832,12 @@ smal_buffer *smal_type_find_alloc_buffer(smal_type *self)
   smal_buffer *buf;
 
   /* TODO: Find the smal_buffer that has the least free objects available. */
-  smal_DLLIST_each(&buffer_head, buf) {
+  smal_dllist_each(&buffer_head, buf); {
     most_used = buf;
     if ( buf->type == self && 
 	 (buf->free_list || buf->stats.live_n != buf->object_capacity) )
       return buf;
-  } smal_DLLIST_each_END();
+  } smal_dllist_each_end();
 
   return 0;
 }
@@ -914,14 +912,14 @@ void smal_each_object(void (*func)(smal_type *type, void *ptr, void *arg), void 
 
   ++ no_gc;
 
-  smal_DLLIST_each(&buffer_head, buf) {
+  smal_dllist_each(&buffer_head, buf); {
     void *ptr;
     for ( ptr = buf->begin_ptr; ptr < buf->alloc_ptr; ptr += smal_buffer_object_size(buf) ) {
       if ( ! smal_bitmap_setQ(&buf->free_bits, smal_buffer_i(buf, ptr)) ) {
 	func(buf->type, ptr, arg);
       }
     }
-  } smal_DLLIST_each_END();
+  } smal_dllist_each_end();
 
   -- no_gc;
 }
@@ -939,13 +937,13 @@ void smal_shutdown()
 
   ++ no_gc;
 
-  smal_DLLIST_each(&buffer_head, buf) {
+  smal_dllist_each(&buffer_head, buf); {
     smal_buffer_free(buf);
-  } smal_DLLIST_each_END();
+  } smal_dllist_each_end();
 
-  smal_DLLIST_each(&type_head, type) {
+  smal_dllist_each(&type_head, type); {
     smal_type_free(type);
-  } smal_DLLIST_each_END();
+  } smal_dllist_each_end();
 
   free(buffer_table);
   buffer_table = 0;

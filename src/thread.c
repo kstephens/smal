@@ -66,7 +66,7 @@ void thread_init(smal_thread *t)
   t->thread = pthread_self();
   t->roots = 0;
   
-  smal_DLLIST_INSERT(&thread_list, t);
+  smal_dllist_insert(&thread_list, t);
   
   pthread_setspecific(roots_key, t);
 
@@ -106,7 +106,7 @@ void _smal_thread_init()
     pthread_mutex_init(&thread_list_mutex, 0);
     pthread_mutex_lock(&thread_list_mutex);
     
-    smal_DLLIST_INIT(&thread_list);
+    smal_dllist_init(&thread_list);
 
     pthread_key_create(&roots_key, 0);
 
@@ -157,9 +157,9 @@ void smal_thread_each(void (*func)(smal_thread *t, void *arg), void *arg)
   {
     smal_thread *t;
     
-    smal_DLLIST_each(&thread_list, t) {
+    smal_dllist_each(&thread_list, t); {
       func(t, arg);
-    } smal_DLLIST_each_END();
+    } smal_dllist_each_end();
   }
 
   pthread_mutex_unlock(&thread_list_mutex);
