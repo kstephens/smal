@@ -4,7 +4,6 @@
 */
 
 #include "smal/smal.h"
-#include "smal/explicit_roots.h"
 #include "smal/thread.h"
 
 #include <stdlib.h>
@@ -37,40 +36,42 @@ void my_print_stats()
   }
 }
 
+static void *bottom_of_stack;
+
 void smal_before_collect_inner(void *top_of_stack)
 {
   smal_thread *thr = smal_thread_self();
   thr->top_of_stack = top_of_stack;
+  thr->bottom_of_stack = bottom_of_stack;
   setjmp(thr->registers._jb);
 }
-
-static void *bottom_of_stack;
 
 void smal_mark_roots()
 {
   smal_thread *thr = smal_thread_self();
   smal_mark_ptr_range(&thr->registers, &thr->registers + 1);
-  smal_roots_mark_chain(0);
+  smal_mark_ptr_range(thr->top_of_stack, thr->bottom_of_stack);
 }
 
+static
 void my_count_object(smal_type *type, void *ptr, void *arg)
 {
   //  fprintf(stderr, "  type %p obj %p\n", type, ptr);
   (* (int *) arg) ++; 
 }
 
-int main(int argc, char **argv)
-{
+static
   unsigned long 
     smal_alloc_n = 0, 
     smal_each_object_n = 0, 
     smal_collect_n = 0;
 
+static
+void run_test()
+{
   int alloc_id;
   my_cons *x = 0, *y = 0;
-  smal_roots_2(x, y);
-  bottom_of_stack = &argv;
-  
+
   my_cons_type = smal_type_for(sizeof(my_cons), my_cons_mark, 0);
   
   for ( alloc_id = 0; alloc_id < 10000000; ++ alloc_id ) {
@@ -122,9 +123,15 @@ int main(int argc, char **argv)
   my_print_stats();
   
   x = y = 0;
-  smal_collect();
+}
 
-  smal_roots_end();
+int main(int argc, char **argv)
+{
+  bottom_of_stack = &argv;
+  
+  run_test();
+
+  smal_collect();
 
   {
     char cmd[1024];

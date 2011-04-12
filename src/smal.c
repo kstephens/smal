@@ -549,6 +549,13 @@ void smal_mark_ptr(void *ptr)
 
 void smal_mark_ptr_range(void *ptr, void *ptr_end)
 {
+  if ( ptr_end < ptr ) {
+    void *tmp = ptr_end;
+    ptr_end = ptr;
+    ptr = tmp;
+  }
+
+  /* Assume alignment to sizeof(int) */
   smal_ALIGN(ptr, sizeof(int));
   ptr_end -= sizeof(void*) - 1;
 
