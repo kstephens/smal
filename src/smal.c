@@ -469,8 +469,10 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
   /* handle hardcoded object_size. */
   self->object_size = smal_buffer_object_size(self);
 
+  /* Default alignment to sizeof(double) */
   if ( ! self->object_alignment )
-    self->object_alignment = self->object_size;
+    self->object_alignment = sizeof(double);
+
   /* handle hardcoded object_alignment. */
   self->object_alignment = smal_buffer_object_alignment(self);
 
