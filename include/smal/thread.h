@@ -10,8 +10,14 @@
 #define SMAL_PTHREAD 0
 #endif
 
+#include <setjmp.h>
+
 #if SMAL_PTHREAD
 #include <pthread.h>
+#endif
+
+#ifndef smal_jmp_buf
+#define smal_jmp_buf jmp_buf
 #endif
 
 typedef struct smal_thread {
@@ -22,6 +28,9 @@ typedef struct smal_thread {
   void *thread;
 #endif
   void *roots;
+  void *bottom_of_stack;
+  void *top_of_stack;
+  struct { jmp_buf _jb; } registers;
 } smal_thread;
 
 void smal_thread_init();

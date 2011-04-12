@@ -87,7 +87,8 @@ void *smal_alloc(smal_type *type);
 void smal_free(void *ptr);
 void smal_mark_ptr(void *ptr); /* user can call this method. */
 void smal_mark_ptr_exact(void *ptr); /* assumes ptr is 0 or known to be properly allocated and aligned. */
-void smal_mark_roots(); /* user must define this method. */
+void smal_mark_ptr_range(void *ptr, void *ptr_end);
+
 void smal_collect(); /* user can call this method. */
 /* Disables GC while executing. */
 void smal_each_object(void (*func)(smal_type *type, void *ptr, void *arg), void *arg);
@@ -97,6 +98,11 @@ void smal_shutdown();
 
 void smal_global_stats(smal_stats *stats);
 void smal_type_stats(smal_type *type, smal_stats *stats);
+
+/* Functions that must be defined by users: */
+
+void smal_before_collect_inner(void *top_of_stack);
+void smal_mark_roots(); /* user must define this method. */
 
 #endif
 

@@ -5,6 +5,8 @@
 
 #include "smal/smal.h"
 #include "smal/explicit_roots.h"
+#include "smal/thread.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h> /* getpid() */
@@ -35,8 +37,19 @@ void my_print_stats()
   }
 }
 
+void smal_before_collect_inner(void *top_of_stack)
+{
+  smal_thread *thr = smal_thread_self();
+  thr->top_of_stack = top_of_stack;
+  setjmp(thr->registers._jb);
+}
+
+static void *bottom_of_stack;
+
 void smal_mark_roots()
 {
+  smal_thread *thr = smal_thread_self();
+  smal_mark_ptr_range(&thr->registers, &thr->registers + 1);
   smal_roots_mark_chain(0);
 }
 
@@ -56,6 +69,7 @@ int main(int argc, char **argv)
   int alloc_id;
   my_cons *x = 0, *y = 0;
   smal_roots_2(x, y);
+  bottom_of_stack = &argc;
   
   my_cons_type = smal_type_for(sizeof(my_cons), my_cons_mark, 0);
   

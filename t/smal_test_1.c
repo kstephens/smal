@@ -21,6 +21,10 @@ static void my_cons_mark (void *ptr)
   smal_mark_ptr(((my_cons *) ptr)->cdr);
 }
 
+void smal_before_collect_inner(void *tos)
+{
+}
+
 void smal_mark_roots()
 {
   smal_roots_mark_chain(0);

@@ -718,7 +718,7 @@ void smal_buffer_pre_mark(smal_buffer *self)
 }
 
 
-void smal_collect()
+void _smal_collect_inner()
 {
   smal_buffer *buf;
 
