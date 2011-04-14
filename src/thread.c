@@ -11,6 +11,7 @@
 #include <stdlib.h> /* malloc(), free() */
 #include <stdio.h>
 
+static int thread_inited;
 static smal_thread thread_main;
 
 static
@@ -102,7 +103,7 @@ static pthread_once_t _smal_thread_is_initialized = PTHREAD_ONCE_INIT;
 static
 void _smal_thread_init()
 {
-  if ( ! roots_key ) {
+  if ( ! thread_inited ) {
     pthread_mutex_init(&thread_list_mutex, 0);
     pthread_mutex_lock(&thread_list_mutex);
     
@@ -117,19 +118,21 @@ void _smal_thread_init()
     pthread_mutex_unlock(&thread_list_mutex);
 
     thread_init(&thread_main);
+
+    thread_inited = 1;
   }
 }
 
 void smal_thread_init()
 {
-  if ( ! roots_key ) { /* fast unsafe lock */
+  if ( ! thread_inited ) { /* fast unsafe lock */
     (void) pthread_once(&_smal_thread_is_initialized, _smal_thread_init);
   }
 }
 
 smal_thread *smal_thread_self()
 {
-  if ( ! roots_key )
+  if ( ! thread_inited )
     smal_thread_init();
 
   {
@@ -171,6 +174,7 @@ void smal_thread_each(void (*func)(smal_thread *t, void *arg), void *arg)
 
 void smal_thread_init()
 {
+  thread_inited = 1;
   /* NOTHING */
 }
 
