@@ -18,12 +18,13 @@ int smal_roots_add_global(smal_roots *);
 smal_roots *smal_roots_current();
 void smal_roots_set_current(smal_roots *);
 
-#define smal_roots_begin(N) \
+#define smal_roots_begin(N)				      \
   smal_roots _roots = { _bindings, N, smal_roots_current() }; \
   smal_roots_set_current(&_roots)
 
-#define smal_roots_end() \
- smal_roots_set_current(_roots._next); }
+#define smal_roots_end()			\
+  smal_roots_set_current(_roots._next);		\
+  }
 
 #define smal_roots_end_global() \
   smal_roots_add_global(&_roots); \
