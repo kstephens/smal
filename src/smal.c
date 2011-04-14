@@ -129,6 +129,17 @@ void smal_bitmap_free(smal_bitmap *self)
  * Debugging support.
  */
 
+const char *smal_stats_names[] = {
+  "alloc_id",
+  "free_id",
+  "alloc_n",
+  "avail_n",
+  "live_n",
+  "free_n",
+  "buffer_n",
+  0
+};
+
 #ifndef SMAL_DEBUG
 #define SMAL_DEBUG 0
 #endif
@@ -232,10 +243,11 @@ void smal_buffer_table_add(smal_buffer *self)
   
   // fprintf(stderr, "smal_buffer_table_add(%p)\n", self);
 
+  /* buffer_id_min and buffer_id_max is stale. */
   if ( buffer_id_min == 0 && buffer_id_max == 0 ) {
     smal_buffer *buf;
-    buffer_id_min = buffer_id_max = self->buffer_id;
-    smal_dllist_each(&buffer_head, buf) {
+    buffer_id_min = buffer_id_max = _smal_buffer_buffer_id(self);
+    smal_dllist_each(&buffer_head, buf); {
       if ( buffer_id_min > buf->buffer_id )
 	buffer_id_min = buf->buffer_id;
       if ( buffer_id_max < buf->buffer_id )
@@ -262,7 +274,7 @@ void smal_buffer_table_add(smal_buffer *self)
     for ( i = 0; i < buffer_table_size; ++ i ) {
       smal_buffer *x = buffer_table[i];
       if ( x ) {
-	size_t j = x->buffer_id % buffer_table_size_new;
+	size_t j = _smal_buffer_buffer_id(x) % buffer_table_size_new;
 	assert(! buffer_table_new[j]);
 	buffer_table_new[j] = x;
       }
@@ -274,7 +286,7 @@ void smal_buffer_table_add(smal_buffer *self)
   buffer_table = buffer_table_new;
   buffer_table_size = buffer_table_size_new;
 
-  i = self->buffer_id % buffer_table_size;
+  i = _smal_buffer_buffer_id(self) % buffer_table_size;
   assert(! buffer_table[i]);
   buffer_table[i] = self;
 
@@ -551,18 +563,24 @@ void smal_mark_ptr(void *ptr)
 
 void smal_mark_ptr_range(void *ptr, void *ptr_end)
 {
+  // fprintf(stderr, "   smpr [%p, %p]\n", ptr, ptr_end);
   if ( ptr_end < ptr ) {
     void *tmp = ptr_end;
     ptr_end = ptr;
     ptr = tmp;
   }
 
-  /* Assume alignment to sizeof(int) */
-  smal_ALIGN(ptr, sizeof(int));
+  smal_ALIGN(ptr, __alignof__(void*));
   ptr_end -= sizeof(void*) - 1;
 
+  // fprintf(stderr, "   smpr [%p, %p] ALIGNED\n", ptr, ptr_end);
+
   while ( ptr < ptr_end ) {
-    _smal_mark_ptr(*(void**) ptr);
+    void *p = *(void**) ptr;
+    if ( p ) {
+      // fprintf(stderr, "     smpr *%p = %p\n", ptr, p);
+      _smal_mark_ptr(p);
+    }
     ptr += sizeof(int);
   }
 }

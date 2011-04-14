@@ -28,7 +28,7 @@ $(SRC_LIB) : $(O_FILES)
 	ar -rs $@ $(O_FILES)
 
 t/%.t : t/%.c $(SRC_LIB) $(H_FILES)
-	$(CC) $(CFLAGS:-O3=-O2) -DSMAL_UNIT_TEST=1 -DSMAL_DEBUG=1 -o $@ $(@:%.t=%.c) $(SRC_LIB) 
+	$(CC) $(CFLAGS:$(CFLAGS_OPT)=) -DSMAL_UNIT_TEST=1 -DSMAL_DEBUG=1 -o $@ $(@:%.t=%.c) $(SRC_LIB) 
 
 clean :
 	rm -rf *.s *.dSYM *.o *.a src/*.o src/*.a t/*.t t/*.dSYM

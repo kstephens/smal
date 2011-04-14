@@ -35,6 +35,7 @@ struct smal_stats {
   size_t free_n; /* number of objects on free_list. */
   size_t buffer_n; /* number of buffers active. */
 };
+extern const char *smal_stats_names[];
 
 struct smal_type {
   smal_type *next, *prev; /* global list of all smal_types. */
