@@ -600,6 +600,18 @@ void smal_mark_ptr_exact(void *ptr)
   }
 }
 
+int smal_object_reachableQ(void *ptr)
+{
+  smal_buffer *buf;
+  if ( ! ptr )
+    return 0;
+  buf = smal_ptr_to_buffer(ptr);
+  if ( smal_buffer_ptr_is_in_rangeQ(buf, ptr) )
+    return ! ! smal_buffer_markQ(buf, ptr);
+  else
+    return 0;
+}
+
 #if 1
 #define smal_buffer_check_free_list(self) (void) 0
 #else
@@ -745,7 +757,7 @@ void smal_buffer_pre_mark(smal_buffer *self)
 }
 
 
-void smal_collect_each_freed_object(int (*func)(smal_type *type, void *ptr, void *arg), void *arg)
+void smal_each_sweepable_object(int (*func)(smal_type *type, void *ptr, void *arg), void *arg)
 {
   smal_buffer *self;
   assert(in_gc);

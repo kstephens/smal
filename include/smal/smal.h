@@ -61,8 +61,8 @@ struct smal_buffer {
   size_t buffer_id;
   smal_type *type;
 
-  size_t object_size;
-  size_t object_alignment; /* defaults to object_size. */
+  size_t object_size; /* == type->object_size. */
+  size_t object_alignment; /* defaults to sizeof(double). */
   size_t object_capacity; /* number of objects that can be allocated from this buffer. */
 
   void *mmap_addr;
@@ -107,10 +107,13 @@ void smal_collect_before_mark();
 void smal_collect_after_mark();
 void smal_collect_before_sweep();
 void smal_collect_after_sweep();
-void smal_mark_roots(); /* user must define this method. */
+void smal_mark_roots(); /* TODO: rename this to smal_collect_mark_roots(). */
 
-/* Internal methods */
-void smal_collect_each_freed_object(int (*func)(smal_type *type, void *ptr, void *arg), void *arg);
+/* Low-level/extension functions */
+int smal_object_reachableQ(void *ptr);
+
+/* Can be called only from within smal_collect_*() callbacks. */
+void smal_each_sweepable_object(int (*func)(smal_type *type, void *ptr, void *arg), void *arg);
 
 #endif
 

@@ -16,17 +16,6 @@
 static int initialized;
 static voidP_voidP_Table referred_table, reference_table;
 
-static smal_type *reference_type;
-static void reference_type_mark(void *object)
-{
-  smal_reference *reference = object;
-  smal_reference_queue_list *ref_queue_list = reference->reference_queue_list;
-  while ( ref_queue_list ) {
-    smal_mark_ptr_exact(ref_queue_list->reference_queue);
-    ref_queue_list = ref_queue_list->next;
-  }
-}
-
 static smal_reference *find_reference_by_referred(void *ptr)
 {
   void **ptrp;
@@ -35,20 +24,22 @@ static smal_reference *find_reference_by_referred(void *ptr)
     voidP_voidP_TableInit(&reference_table, 8);
     initialized = 1;
   }
-  if ( (ptrp = voidP_voidP_TableGet(&referred_table, ptr)) ) {
+  if ( (ptrp = voidP_voidP_TableGet(&referred_table, ptr)) )
     return *ptrp;
-  } else
+  else
     return 0;
 }
 
+#if 0
 static smal_reference *find_reference(smal_reference *reference)
 {
   void **ptrp;
-  if ( (ptrp = voidP_voidP_TableGet(&reference_table, reference)) ) {
+  if ( (ptrp = voidP_voidP_TableGet(&reference_table, reference)) )
     return *ptrp;
-  } else
+  else
     return 0;
 }
+#endif 
 
 static void add_reference(smal_reference *reference)
 {
@@ -63,13 +54,36 @@ static void remove_reference(smal_reference *reference)
 }
 
 
+static smal_type *reference_type;
+static void reference_type_mark(void *object)
+{
+  smal_reference *reference = object;
+  smal_reference_queue_list *ref_queue_list = reference->reference_queue_list;
+  while ( ref_queue_list ) {
+    smal_mark_ptr_exact(ref_queue_list->reference_queue);
+    ref_queue_list = ref_queue_list->next;
+  }
+}
+static void reference_type_free(void *object)
+{
+  smal_reference *reference = object;
+  smal_reference_queue_list *ref_queue_list;
+  while ( (ref_queue_list = reference->reference_queue_list) ) {
+    ref_queue_list = ref_queue_list->next;
+    free(reference->reference_queue_list);
+    reference->reference_queue_list = ref_queue_list;
+  }  
+  remove_reference(object);
+}
+
+
 smal_reference * smal_reference_create_weak(void *ptr, smal_reference_queue *ref_queue)
 {
   smal_reference *reference;
 
   if ( ! (reference = find_reference_by_referred(ptr)) ) {
     if ( ! reference_type )
-      reference_type = smal_type_for(sizeof(*reference), reference_type_mark, 0);
+      reference_type = smal_type_for(sizeof(*reference), reference_type_mark, reference_type_free);
     if ( ! (reference = smal_alloc(reference_type)) )
       return 0;
     reference->data = 0;
@@ -140,38 +154,40 @@ smal_reference * smal_reference_queue_take(smal_reference_queue *ref_queue)
 }
 
 
-/* For each freed objects:
-   add it to its reference_queue,
-   Remove it from the ptr->smal_reference table.
-*/
 static
-int freed_object(smal_type *type, void *ptr, void *arg)
+void referred_sweeped(smal_reference *reference)
 {
-  smal_reference *reference;
-
-  /* Is ptr a reference to smal_reference*? */
-  if ( type == reference_type && (reference = find_reference(ptr)) ) {
-    // fprintf(stderr, "  ref %p => %p ref freed\n", reference, reference->referred);
-    remove_reference(reference);
-  } else
-  /* Does ptr have a smal_reference pointing to it? */
-  if ( (reference = find_reference_by_referred(ptr)) ) {
-    // fprintf(stderr, "  ref %p => %p referred freed\n", reference, reference->referred);
-    remove_reference(reference);
-    reference->referred = 0;
-    while ( reference->reference_queue_list ) {
-      smal_reference_queue_list *list = reference->reference_queue_list;
-      queue_reference(list->reference_queue, reference);
-      reference->reference_queue_list = list->next;
-      free(list);
-    }
+  // fprintf(stderr, "    ref %p => %p referred unreachable\n", reference, reference->referred);
+  remove_reference(reference);
+  reference->referred = 0;
+  while ( reference->reference_queue_list ) {
+    smal_reference_queue_list *list = reference->reference_queue_list;
+    queue_reference(list->reference_queue, reference);
+    reference->reference_queue_list = list->next;
+    free(list);
   }
-  return 0;
 }
 
+/*
+  For all smal_references,
+  If reference is not reachable, do nothing.
+  If reference's referred is not reachable, 
+  forget referred and add reference to its reference queues.
+*/
 void smal_reference_before_sweep()
 {
-  smal_collect_each_freed_object(freed_object, 0);
+  voidP_voidP_TableIterator i;
+  voidP_voidP_TableIteratorInit(&referred_table, &i);
+  while ( voidP_voidP_TableIteratorNext(&referred_table, &i) ) {
+    smal_reference *reference = *voidP_voidP_TableIteratorData(&referred_table, &i);
+    // fprintf(stderr, "  ref %p => %p\n", reference, reference->referred);
+    if ( smal_object_reachableQ(reference) ) {
+      // fprintf(stderr, "    ref %p reachable \n", reference);
+      if ( ! smal_object_reachableQ(reference->referred) ) {
+	referred_sweeped(reference);
+      }
+    }
+  }
 }
 
 

@@ -21,7 +21,9 @@ SRC_LIB := src/libsmal.a #
 all : $(SRC_LIB) $(TESTS_T)
 
 src/smal.s : src/smal.c $(H_FILES)
-	$(CC) $(CFLAGS) -S -o $@ $<
+	$(CC) $(CFLAGS) -DNASSERT=1 -S -o $@ $<
+
+src/hash/voidP_voidP_Table.o : src/hash/*.c src/hash/*.h src/hash/*.def
 
 $(SRC_LIB) : $(O_FILES)
 	rm -f $@
