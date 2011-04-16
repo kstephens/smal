@@ -1,6 +1,26 @@
 
 = SMAL - A (S)imple, (M)ark-sweep (AL)locator =
 
+== Overview ==
+
+SMAL is simple mark-sweep allocator for small objects.  It's designed to be as minimal, performant and modular as possible.
+
+* It is not a drop-in replacement for malloc() and free().
+* It uses only malloc(), free(), mmap(), and munmap().
+* It has no default collection scheduling policy; users must specify when to attempt collection.
+* It has no default root marking policy.
+* Is neither conservative nor type-safe; users can configure it for both scenarios.
+* It should work in co-operation with any malloc()/free() implementation.
+
+It does however optionally support:
+
+* Threads.
+* Explicit, exact root declaration for both globals and stack variables.
+* Implicit, conservative root scanning of stack variables.
+* Weak references.
+* Reference queues.
+* Finalizers.
+
 == Data Structure Overview ==
 
 <code>smal_type</code> represents a user-data type of a fixed size, mark and free callbacks.
@@ -104,7 +124,7 @@ The algorithms/data structures are as follows:
 # Determine the mark bitmap offset.
 # If object is not already marked, 
 # mark the object in the bitmap and
-# call the <code>smal_type</code>'s <code>mark_func</code> function.
+# call the <code>smal_type</code>'s <code>mark_func()</code> function.
 
 === Sweep ===
 
@@ -130,6 +150,7 @@ However, SMAL provides a simple, <code>smal_roots</code> package to explicitly d
 SMAL supports a tiny <code>smal_thread</code> abstraction around <code>pthreads</code>.
 The <code>smal_roots</code> package is thread-aware and thread-safe.  
 The rest of the SMAL allocator is not yet thread-safe.
+See include/smal/thread.h.
 
 == Object Enumeration ==
 
@@ -138,6 +159,12 @@ SMAL supports global object enumeration (i.e. Ruby ObjectSpace.each_object).
 == Weak References and Reference Queues ==
 
 SMAL contains an optional, weak reference and reference queue implementation.
+See include/smal/reference.h.
+
+== Finalization ==
+
+SMAL contains an optional finalizer implementation.
+See include/smal/finalizer.h.
 
 == Licensing ==
 
@@ -145,6 +172,5 @@ MIT License
 
 == TODO ==
 
-* Support for finalization.
 * Full-thread safety.
 
