@@ -1,0 +1,7 @@
+#define HASH(X)charP_int_##X
+#define HASH_KEY const char*
+#define HASH_KEY_HASH(X) strhash(X)
+#define HASH_KEY_EQUAL(X,Y) ((X)[0] == (Y)[0] && strcmp((X),(Y))==0)
+#define HASH_KEY_SET(X,Y) do { (X) = strcpy(HASH_MALLOC(strlen(Y) + 1), (Y)); } while(0)
+#define HASH_KEY_FREE(X) do { HASH_FREE(X); } while(0)
+#define HASH_DATA int

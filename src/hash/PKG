@@ -1,0 +1,6 @@
+NAME=hash
+VERSION=0.5
+DESC="A C template library for efficient, configurable hash tables."
+CATEGORY="Development Tools"
+REQUIRES_PKGS="../util"
+REQUIRES_OTHERS=""

@@ -1,0 +1,34 @@
+/*
+** Template Hash Table
+** Copyright 1998-2011, Kurt A. Stephens, http://kurtstephens.com/
+*/
+
+#undef HASH
+#undef HASH_EXTERN
+#undef HASH_VAL
+#undef HASH_KEY
+#undef HASH_KEY_SET
+#undef HASH_KEY_FREE
+#undef HASH_KEY_EQUAL
+#undef HASH_KEY_HASH
+#ifdef HASH_DATA
+#undef HASH_DATA
+#undef HASH_DATA_SET
+#undef HASH_DATA_FREE
+#endif
+#undef HASH_TABLE_DATA
+#undef HASH_TABLE_COLLISIONS
+#undef HASH_TABLE_COLLISIONS_THRESHOLD
+#ifdef HASH_TABLE_COLLISIONS_THRESHOLD_CHECK
+#undef HASH_TABLE_COLLISIONS_THRESHOLD_CHECK
+#endif
+#ifdef HASH_TABLE_NEW_CAPACITY
+#undef HASH_TABLE_NEW_CAPACITY
+#endif
+#undef HASH_SEARCH_MOVE_TO_FRONT
+#undef HASH_TABLE_AUTO_RESIZE
+#undef HASH_TABLE_NENTRIES
+#undef HASH_TABLE_SIZE
+#undef HASH_TABLE_SIZE_TO_PRIME
+#undef HASH_KEEP_HASH
+#undef HASH_CACHE

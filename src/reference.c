@@ -11,6 +11,11 @@
 #include <string.h> /* memcpy() */
 #include <stdio.h>
 
+#include "hash/voidP_voidP_Table.h"
+
+static int initialized;
+static voidP_voidP_Table referred_table, reference_table;
+
 static smal_type *reference_type;
 static void reference_type_mark(void *object)
 {
@@ -24,22 +29,40 @@ static void reference_type_mark(void *object)
 
 static smal_reference *find_reference_by_referred(void *ptr)
 {
-  return 0;
+  void **ptrp;
+  if ( ! initialized ) {
+    voidP_voidP_TableInit(&referred_table, 8);
+    voidP_voidP_TableInit(&reference_table, 8);
+    initialized = 1;
+  }
+  if ( (ptrp = voidP_voidP_TableGet(&referred_table, ptr)) ) {
+    return *ptrp;
+  } else {
+    return 0;
+  }
 }
 
 static smal_reference *find_reference(smal_reference *reference)
 {
-  return 0;
+  void **ptrp;
+  if ( (ptrp = voidP_voidP_TableGet(&reference_table, reference)) ) {
+    return *ptrp;
+  } else {
+    return 0;
+  }
 }
 
 static void add_reference(smal_reference *reference)
 {
+  voidP_voidP_TableAdd(&referred_table, reference->referred, reference);
+  voidP_voidP_TableAdd(&reference_table, reference, reference);
 }
 
 static void remove_reference(smal_reference *reference)
 {
+  voidP_voidP_TableRemove(&referred_table, reference->referred);
+  voidP_voidP_TableRemove(&reference_table, reference);
 }
-
 
 
 smal_reference * smal_reference_create_weak(void *ptr, smal_reference_queue *ref_queue)
@@ -116,6 +139,10 @@ smal_reference * smal_reference_queue_take(smal_reference_queue *ref_queue)
 }
 
 
+/* For each freed objects:
+   add it to its reference_queue,
+   Remove it from the ptr->smal_reference table.
+*/
 static
 int freed_object(smal_type *type, void *ptr, void *arg)
 {
@@ -123,8 +150,8 @@ int freed_object(smal_type *type, void *ptr, void *arg)
 
   /* Is ptr a reference to smal_reference*? */
   if ( type == reference_type && (reference = find_reference(ptr)) ) {
-    /* Do nothing */
-  }
+    remove_reference(reference);
+  } else
   /* Does ptr have a smal_reference pointing to it? */
   if ( (reference = find_reference_by_referred(ptr)) ) {
     remove_reference(reference);
@@ -141,10 +168,6 @@ int freed_object(smal_type *type, void *ptr, void *arg)
 
 void smal_reference_before_sweep()
 {
-  /* For each freed objects:
-     add it to its reference_queue,
-     Remove it from the ptr->smal_reference table.
-  */
   smal_collect_each_freed_object(freed_object, 0);
 }
 
