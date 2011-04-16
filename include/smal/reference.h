@@ -39,6 +39,5 @@ smal_reference_queue *smal_reference_queue_create();
 smal_reference *smal_reference_queue_take(smal_reference_queue *ref_queue);
 
 void smal_reference_before_sweep(); /* Call from smal_collect_before_sweep() */
-void smal_reference_after_sweep(); /* Call from smal_collect_after_sweep() */
 
 #endif

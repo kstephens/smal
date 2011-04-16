@@ -22,7 +22,7 @@ static void reference_type_mark(void *object)
   smal_reference *reference = object;
   smal_reference_queue_list *ref_queue_list = reference->reference_queue_list;
   while ( ref_queue_list ) {
-    smal_mark_ptr(ref_queue_list->reference_queue);
+    smal_mark_ptr_exact(ref_queue_list->reference_queue);
     ref_queue_list = ref_queue_list->next;
   }
 }
@@ -37,9 +37,8 @@ static smal_reference *find_reference_by_referred(void *ptr)
   }
   if ( (ptrp = voidP_voidP_TableGet(&referred_table, ptr)) ) {
     return *ptrp;
-  } else {
+  } else
     return 0;
-  }
 }
 
 static smal_reference *find_reference(smal_reference *reference)
@@ -47,9 +46,8 @@ static smal_reference *find_reference(smal_reference *reference)
   void **ptrp;
   if ( (ptrp = voidP_voidP_TableGet(&reference_table, reference)) ) {
     return *ptrp;
-  } else {
+  } else
     return 0;
-  }
 }
 
 static void add_reference(smal_reference *reference)
@@ -70,10 +68,10 @@ smal_reference * smal_reference_create_weak(void *ptr, smal_reference_queue *ref
   smal_reference *reference;
 
   if ( ! (reference = find_reference_by_referred(ptr)) ) {
-    if ( ! reference_type ) {
+    if ( ! reference_type )
       reference_type = smal_type_for(sizeof(*reference), reference_type_mark, 0);
-    }
-    reference = smal_alloc(reference_type);
+    if ( ! (reference = smal_alloc(reference_type)) )
+      return 0;
     reference->data = 0;
     reference->referred = ptr;
     reference->reference_queue_list = 0;
@@ -81,6 +79,8 @@ smal_reference * smal_reference_create_weak(void *ptr, smal_reference_queue *ref
   }
   if ( ref_queue ) {
     smal_reference_queue_list *ref_queue_list = malloc(sizeof(*ref_queue_list));
+    if ( ! ref_queue_list )
+      return 0;
     ref_queue_list->reference_queue = ref_queue;
     ref_queue_list->next = reference->reference_queue_list;
     reference->reference_queue_list = ref_queue_list;
@@ -100,7 +100,7 @@ static void ref_queue_mark(void *ptr)
   smal_reference_list *list = ref_queue->reference_list;
   while ( list ) {
     // fprintf(stderr, "ref_queue %p marking %p\n", ref_queue, list->reference);
-    smal_mark_ptr(list->reference);
+    smal_mark_ptr_exact(list->reference);
     list = list->next;
   }
 }
@@ -108,9 +108,8 @@ static void ref_queue_mark(void *ptr)
 smal_reference_queue *smal_reference_queue_create()
 {
   smal_reference_queue *ref_queue;
-  if ( ! reference_queue_type ) {
+  if ( ! reference_queue_type )
     reference_queue_type = smal_type_for(sizeof(*ref_queue), ref_queue_mark, 0);
-  }
   ref_queue = smal_alloc(reference_queue_type);
   ref_queue->reference_list = 0;
   return ref_queue;
@@ -120,7 +119,8 @@ static
 void queue_reference(smal_reference_queue *ref_queue, smal_reference *reference)
 {
   smal_reference_list *list;
-  list = malloc(sizeof(*list));
+  if ( ! (list = malloc(sizeof(*list))) )
+    return;
   list->reference = reference;
   list->next = ref_queue->reference_list;
   ref_queue->reference_list = list;
@@ -135,9 +135,8 @@ smal_reference * smal_reference_queue_take(smal_reference_queue *ref_queue)
     ref_queue->reference_list = list->next;
     free(list);
     return reference;
-  } else {
+  } else
     return 0;
-  }
 }
 
 
@@ -173,10 +172,6 @@ int freed_object(smal_type *type, void *ptr, void *arg)
 void smal_reference_before_sweep()
 {
   smal_collect_each_freed_object(freed_object, 0);
-}
-
-void smal_reference_after_sweep()
-{
 }
 
 
