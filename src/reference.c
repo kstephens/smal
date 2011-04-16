@@ -99,6 +99,7 @@ static void ref_queue_mark(void *ptr)
   smal_reference_queue *ref_queue = ptr;
   smal_reference_list *list = ref_queue->reference_list;
   while ( list ) {
+    // fprintf(stderr, "ref_queue %p marking %p\n", ref_queue, list->reference);
     smal_mark_ptr(list->reference);
     list = list->next;
   }
@@ -123,6 +124,7 @@ void queue_reference(smal_reference_queue *ref_queue, smal_reference *reference)
   list->reference = reference;
   list->next = ref_queue->reference_list;
   ref_queue->reference_list = list;
+  // fprintf(stderr, "  ref %p queued into %p\n", reference, ref_queue);
 }
 
 smal_reference * smal_reference_queue_take(smal_reference_queue *ref_queue)
@@ -150,10 +152,12 @@ int freed_object(smal_type *type, void *ptr, void *arg)
 
   /* Is ptr a reference to smal_reference*? */
   if ( type == reference_type && (reference = find_reference(ptr)) ) {
+    // fprintf(stderr, "  ref %p => %p ref freed\n", reference, reference->referred);
     remove_reference(reference);
   } else
   /* Does ptr have a smal_reference pointing to it? */
   if ( (reference = find_reference_by_referred(ptr)) ) {
+    // fprintf(stderr, "  ref %p => %p referred freed\n", reference, reference->referred);
     remove_reference(reference);
     reference->referred = 0;
     while ( reference->reference_queue_list ) {
