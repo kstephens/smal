@@ -4,7 +4,7 @@
 */
 
 #include "smal/smal.h"
-#include "smal/weak.h"
+#include "smal/reference.h"
 
 #include <assert.h>
 #include <stdlib.h> /* malloc(), free() */
