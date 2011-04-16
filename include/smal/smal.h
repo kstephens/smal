@@ -109,5 +109,8 @@ void smal_collect_before_sweep();
 void smal_collect_after_sweep();
 void smal_mark_roots(); /* user must define this method. */
 
+/* Internal methods */
+void smal_collect_each_freed_object(int (*func)(smal_type *type, void *ptr, void *arg), void *arg);
+
 #endif
 

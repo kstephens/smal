@@ -745,6 +745,24 @@ void smal_buffer_pre_mark(smal_buffer *self)
 }
 
 
+void smal_collect_each_freed_object(int (*func)(smal_type *type, void *ptr, void *arg), void *arg)
+{
+  smal_buffer *self;
+  assert(in_gc);
+
+  smal_dllist_each(&buffer_head, self); {
+    void *ptr;
+    for ( ptr = self->begin_ptr; ptr < self->alloc_ptr; ptr += smal_buffer_object_size(self) ) {
+      if ( ! smal_buffer_markQ(self, ptr) ) {
+	if ( ! smal_bitmap_setQ(&self->free_bits, smal_buffer_i(self, ptr)) ) {
+	  func(self->type, ptr, arg);
+	}
+      }
+    }
+  } smal_dllist_each_end();
+}
+
+
 void _smal_collect_inner()
 {
   smal_buffer *buf;
