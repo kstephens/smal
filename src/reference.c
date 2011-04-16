@@ -14,14 +14,13 @@
 #include "hash/voidP_voidP_Table.h"
 
 static int initialized;
-static voidP_voidP_Table referred_table, reference_table;
+static voidP_voidP_Table referred_table;
 
 static smal_reference *find_reference_by_referred(void *ptr)
 {
   void **ptrp;
   if ( ! initialized ) {
     voidP_voidP_TableInit(&referred_table, 8);
-    voidP_voidP_TableInit(&reference_table, 8);
     initialized = 1;
   }
   if ( (ptrp = voidP_voidP_TableGet(&referred_table, ptr)) )
@@ -30,27 +29,14 @@ static smal_reference *find_reference_by_referred(void *ptr)
     return 0;
 }
 
-#if 0
-static smal_reference *find_reference(smal_reference *reference)
-{
-  void **ptrp;
-  if ( (ptrp = voidP_voidP_TableGet(&reference_table, reference)) )
-    return *ptrp;
-  else
-    return 0;
-}
-#endif 
-
 static void add_reference(smal_reference *reference)
 {
   voidP_voidP_TableAdd(&referred_table, reference->referred, reference);
-  voidP_voidP_TableAdd(&reference_table, reference, reference);
 }
 
 static void remove_reference(smal_reference *reference)
 {
   voidP_voidP_TableRemove(&referred_table, reference->referred);
-  voidP_voidP_TableRemove(&reference_table, reference);
 }
 
 
