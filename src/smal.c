@@ -753,6 +753,8 @@ void _smal_collect_inner()
 
   if ( in_gc || no_gc ) return;
 
+  smal_collect_before_mark();
+
   in_gc = 1;
 
   smal_dllist_each(&buffer_head, buf); {
@@ -761,11 +763,18 @@ void _smal_collect_inner()
 
   smal_mark_roots();
 
+  smal_collect_after_mark();
+
+  smal_collect_before_sweep();
+
   smal_dllist_each(&buffer_head, buf); {
     smal_buffer_sweep(buf);
   } smal_dllist_each_end();
 
   in_gc = 0;
+
+  smal_collect_after_sweep();
+
   smal_debug(1, "  stats.alloc_n = %d, stats.live_n = %d, stats.avail_n = %d, stats.free_n = %d",
 	     buffer_head.stats.alloc_n,
 	     buffer_head.stats.live_n,

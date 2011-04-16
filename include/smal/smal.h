@@ -102,7 +102,11 @@ void smal_type_stats(smal_type *type, smal_stats *stats);
 
 /* Functions that must be defined by users: */
 
-void smal_before_collect_inner(void *top_of_stack);
+void smal_collect_inner_before(void *top_of_stack);
+void smal_collect_before_mark();
+void smal_collect_after_mark();
+void smal_collect_before_sweep();
+void smal_collect_after_sweep();
 void smal_mark_roots(); /* user must define this method. */
 
 #endif
