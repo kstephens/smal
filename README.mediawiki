@@ -24,7 +24,6 @@ Objects are allocated by <code>smal_alloc(smal_type*)</code>.   Note: objects ar
 
 Objects are parceled, on-demand, from a <code>smal_buffer</code>, by incrementing <code>alloc_ptr</code> by the <code>smal_type</code>'s fixed object size, <code>object_size</code>, starting at <code>begin_ptr</code> and terminating at <code>end_ptr</code>.  
 
-
 == Object Reclaimation ==
 
 Each <code>smal_buffer</code> keeps its own <code>free_list</code>.  
@@ -136,13 +135,16 @@ The rest of the SMAL allocator is not yet thread-safe.
 
 SMAL supports global object enumeration (i.e. Ruby ObjectSpace.each_object).
 
+== Weak References and Reference Queues ==
+
+SMAL contains an optional, weak reference and reference queue implementation.
+
 == Licensing ==
 
 MIT License
 
 == TODO ==
 
-* Support for weak references.
 * Support for finalization.
 * Full-thread safety.
 
