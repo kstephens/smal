@@ -25,7 +25,7 @@ It does, however, optionally support:
 == Main API ==
 
 * <code>smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free_func free_func)</code> locates or creates a new <code>smal_type</code> object for objects of a particular size, mark and free functions.
-* <code>smal_alloc(smal_type *type)</code> allocates new objects of a <code>smal_type</code>.
+* <code>smal_alloc(smal_type *type)</code> allocates a new object of <code>smal_type</code>.
 * <code>smal_mark_ptr(void * ptr)</code> marks a potental pointer.  This is called from within a <code>smal_type</code> <code>mark_func</code>.
 * <code>smal_collect()</code> is called to start a collection.
 
