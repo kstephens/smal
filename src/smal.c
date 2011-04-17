@@ -20,7 +20,8 @@
 #include "smal/thread.h"
 
 
-void smal_init();
+static int initialized;
+static void initialize();
 
 /*********************************************************************
  * Configuration
@@ -181,8 +182,7 @@ static smal_type type_head;
 /* global list of all smal_buffers. */
 static smal_buffer buffer_head;
 
-static
-size_t buffer_id_min, buffer_id_max;
+static size_t buffer_id_min, buffer_id_max;
 
 static smal_buffer *buffer_table_init[] = { 0 };
 static smal_buffer **buffer_table = buffer_table_init;
@@ -209,7 +209,6 @@ smal_buffer *smal_buffer_addr(void *ptr) {
 
 static int in_collect;
 static int no_collect;
-static int inited;
 
 static
 void null_func(void *ptr)
@@ -323,7 +322,7 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size);
     self->stats.N EXPR;			\
   } while ( 0 )
 
-static 
+static
 smal_buffer *smal_buffer_alloc(smal_type *type)
 {
   smal_buffer *self;
@@ -631,7 +630,7 @@ int smal_object_reachableQ(void *ptr)
 #if 1
 #define smal_buffer_check_free_list(self) (void) 0
 #else
-static 
+static
 void smal_buffer_check_free_list(smal_buffer *self)
 {
   void *p;
@@ -839,7 +838,7 @@ smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free
 {
   smal_type *type;
   
-  if ( ! inited ) smal_init();
+  if ( ! initialized ) initialize();
 
   /* must be big enough for free list next pointer. */
   if ( object_size < sizeof(void*) )
@@ -971,7 +970,7 @@ void smal_each_object(void (*func)(smal_type *type, void *ptr, void *arg), void 
   smal_buffer *buf;
 
   if ( in_collect ) return;
-  if ( ! inited ) smal_init();
+  if ( ! initialized ) initialize();
 
   ++ no_collect;
 
@@ -987,12 +986,59 @@ void smal_each_object(void (*func)(smal_type *type, void *ptr, void *arg), void 
   -- no_collect;
 }
 
+void smal_global_stats(smal_stats *stats)
+{
+  *stats = buffer_head.stats;
+}
+
+void smal_type_stats(smal_type *type, smal_stats *stats)
+{
+  *stats = type->stats;
+}
+
+/********************************************************************/
+
+static smal_thread_once _initalized = smal_thread_once_INIT;
+static void _initialize()
+{
+  const char *s;
+
+  if ( (s = getenv("SMAL_DEBUG_LEVEL")) ) {
+    smal_debug_level = atoi(s);
+    if ( smal_debug_level > 0 && ! SMAL_DEBUG ) {
+      fprintf(stderr, "SMAL: SMAL_DEBUG not compiled in\n");
+    }
+  }
+
+  memset(&buffer_head, 0, sizeof(buffer_head));
+  smal_dllist_init(&buffer_head);
+
+  memset(&type_head, 0, sizeof(type_head));
+  smal_dllist_init(&type_head);
+
+  buffer_id_min = 0; buffer_id_max = 0;
+  buffer_table_size = 1;
+  buffer_table =   malloc(sizeof(buffer_table[0]) * buffer_table_size);
+  memset(buffer_table, 0, sizeof(buffer_table[0]) * buffer_table_size);
+}
+static 
+void initialize()
+{
+  initialized = 1;
+  smal_thread_do_once(&_initalized, _initialize);
+}
+
+void smal_init()
+{
+  initialize();
+}
+
 void smal_shutdown()
 {
   smal_buffer *buf;
   smal_type *type;
 
-  if ( ! inited ) return;
+  if ( ! initialized ) return;
   if ( in_collect ) abort();
 
   ++ no_collect;
@@ -1008,61 +1054,13 @@ void smal_shutdown()
   free(buffer_table);
   buffer_table = 0;
 
-  -- no_collect;
-
-  inited = 0;
-}
-
-void smal_global_stats(smal_stats *stats)
-{
-  *stats = buffer_head.stats;
-}
-
-void smal_type_stats(smal_type *type, smal_stats *stats)
-{
-  *stats = type->stats;
-}
-
-/********************************************************************/
-
-static int initialized;
-static smal_thread_once _initalized = smal_thread_once_INIT;
-static void _initialize()
-{
-  const char *s;
-
-  if ( (s = getenv("SMAL_DEBUG_LEVEL")) ) {
-    smal_debug_level = atoi(s);
-    if ( smal_debug_level > 0 && ! SMAL_DEBUG ) {
-      fprintf(stderr, "SMAL: SMAL_DEBUG not compiled in\n");
-    }
+  {
+    static smal_thread_once zero = smal_thread_once_INIT;
+    _initalized = zero;
   }
+  initialized = 0;
 
-  memset(&buffer_head, 0, sizeof(buffer_head));
-  smal_dllist_init(&buffer_head);
-  smal_dllist_init(&buffer_head.type_buffer_list);
-
-  memset(&type_head, 0, sizeof(type_head));
-  smal_dllist_init(&type_head);
-
-  buffer_id_min = 0; buffer_id_max = 0;
-  buffer_table_size = 1;
-  buffer_table =   malloc(sizeof(buffer_table[0]) * buffer_table_size);
-  memset(buffer_table, 0, sizeof(buffer_table[0]) * buffer_table_size);
-}
-static void initialize()
-{
-  initialized = 1;
-  smal_thread_do_once(&_initalized, _initialize);
-}
-
-void smal_init()
-{
-  if ( inited )
-    return;
-
-  inited = 1;
-  initialize();
+  -- no_collect;
 }
 
 
