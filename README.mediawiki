@@ -9,13 +9,13 @@ SMAL is simple mark-sweep allocator for small objects.  It's designed to be as m
 * It uses only malloc(), free(), mmap(), and munmap().
 * It has no default collection scheduling policy; users must specify when to attempt collection.
 * It has no default root marking policy.
-* Is neither conservative nor type-safe; users can configure it for both scenarios.
+* Is neither conservative, nor type-safe; users can configure it for both scenarios.
 * It should work in co-operation with any malloc()/free() implementation.
 
-It does however optionally support:
+It does, however, optionally support:
 
 * Threads.
-* Explicit, exact root declaration for both globals and stack variables.
+* Explicit, exact root declarations of globals and stack variables.
 * Implicit, conservative root scanning of stack variables.
 * Weak references.
 * Reference queues.
@@ -158,7 +158,7 @@ SMAL supports global object enumeration (i.e. Ruby ObjectSpace.each_object).
 
 == Weak References and Reference Queues ==
 
-SMAL contains an optional, weak reference and reference queue implementation.
+SMAL contains an optional weak reference and reference queue implementation.
 See include/smal/reference.h.
 
 == Finalization ==
