@@ -133,8 +133,8 @@ The algorithms/data structures are as follows:
 # Determine if object pointer has proper alignment to the head of the object allocation.
 # Determine the mark bitmap offset.
 # If object is not already marked, 
-# mark the object in the bitmap and
-# call the <code>smal_type</code>'s <code>mark_func()</code> function.
+# Mark the object in the bitmap, and
+# Call the <code>smal_type</code>'s <code>mark_func()</code> function.
 
 === Sweep ===
 
