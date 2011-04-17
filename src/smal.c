@@ -17,7 +17,10 @@
 #include <assert.h>
 #include "smal/smal.h"
 #include "smal/dllist.h"
+#include "smal/thread.h"
 
+
+void smal_init();
 
 /*********************************************************************
  * Configuration
@@ -181,10 +184,9 @@ static smal_buffer buffer_head;
 static
 size_t buffer_id_min, buffer_id_max;
 
-static
-smal_buffer **buffer_table;
-static
-size_t buffer_table_size;
+static smal_buffer *buffer_table_init[] = { 0 };
+static smal_buffer **buffer_table = buffer_table_init;
+static size_t buffer_table_size = 1;
 
 #define _smal_buffer_buffer_id(PTR) (((size_t) (PTR)) / smal_buffer_size)
 #define _smal_buffer_offset(PTR) (((size_t) (PTR)) & smal_buffer_mask)
@@ -205,8 +207,8 @@ smal_buffer *smal_buffer_addr(void *ptr) {
 }
 #define smal_buffer_addr(PTR) _smal_buffer_addr(PTR)
 
-static int in_gc;
-static int no_gc;
+static int in_collect;
+static int no_collect;
 static int inited;
 
 static
@@ -302,7 +304,7 @@ void smal_buffer_table_remove(smal_buffer *self)
   assert(buffer_table[i] == self);
   buffer_table[i] = 0;
 
-  smal_dllist_delete(self);
+  smal_dllist_delete(self); /* Remove from global buffer list. */
 
   /* Adjust buffer_table window. */
   if ( buffer_id_min == self->buffer_id || buffer_id_max == self->buffer_id ) {
@@ -325,12 +327,9 @@ static
 smal_buffer *smal_buffer_alloc(smal_type *type)
 {
   smal_buffer *self;
-
   size_t size;
   void *addr;
   size_t offset;
-  void *keep_addr = 0, *free_addr = 0;
-  size_t keep_size = 0, free_size = 0;
   int result;
   
   smal_debug(1, "()");
@@ -347,6 +346,9 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
 
   /* Not aligned? */
   if ( (offset = smal_buffer_offset(addr)) ) {
+    void *keep_addr = 0, *free_addr = 0;
+    size_t keep_size = 0, free_size = 0;
+
     result = munmap(addr, size);
     smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) addr, (unsigned long) size, (int) result);
 
@@ -390,6 +392,7 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
     smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) free_addr, (unsigned long) free_size, (int) result);
 
     addr = keep_addr;
+    size = keep_size;
   }
 
   self = addr;
@@ -398,18 +401,22 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
   self->next = self->prev = 0;
   self->type = type;
   self->buffer_id = smal_buffer_buffer_id(self);
-  self->mmap_addr = keep_addr;
-  self->mmap_size = keep_size;
+  self->mmap_addr = addr;
+  self->mmap_size = size;
   self->begin_ptr = self + 1;
+  smal_dllist_init(&self->type_buffer_list);
+  self->type_buffer_list.buffer = self;
 
   if ( smal_buffer_set_object_size(self, type->object_size) < 0 ) {
-    munmap(self->mmap_addr, self->mmap_size);
+    smal_debug(3, "smal_buffer_set_object_size failed: %s", strerror(errno));
+    result = munmap(self->mmap_addr, self->mmap_size);
+    smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) self->mmap_addr, (unsigned long) self->mmap_size, (int) result);
     self = 0;
   } else {
     smal_buffer_table_add(self);
+    smal_dllist_insert(&type->buffers, &self->type_buffer_list);
+    smal_UPDATE_STATS(buffer_n, += 1);
   }
-
-  smal_UPDATE_STATS(buffer_n, += 1);
 
   smal_debug(1, "() = %p", (void*) self);
 
@@ -429,11 +436,17 @@ void smal_buffer_free(smal_buffer *self)
   if ( self->type ) {
     if ( self->type->alloc_buffer == self )
       self->type->alloc_buffer = 0;
+    assert(self->type->stats.buffer_n >= 1);
     self->type->stats.buffer_n -= 1;
+    assert(self->type->stats.alloc_n >= self->stats.alloc_n);
     self->type->stats.alloc_n -= self->stats.alloc_n;
+    assert(self->type->stats.avail_n >= self->stats.avail_n);
     self->type->stats.avail_n -= self->stats.avail_n;
+    assert(self->type->stats.free_n >= self->stats.free_n);
     self->type->stats.free_n  -= self->stats.free_n;
   }
+  smal_dllist_delete(&self->type_buffer_list);
+  self->type_buffer_list.buffer = 0;
 
   smal_bitmap_free(&self->free_bits);
   smal_bitmap_free(&self->mark_bits);
@@ -447,6 +460,7 @@ void smal_buffer_free(smal_buffer *self)
   assert(buffer_head.stats.free_n  >= self->stats.free_n);
   buffer_head.stats.free_n  -= self->stats.free_n;
 
+  assert(buffer_head.stats.buffer_n >= 1);
   buffer_head.stats.buffer_n -= 1;
 
   result = munmap(addr, size);
@@ -492,13 +506,13 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
   smal_ALIGN(self->begin_ptr, self->object_alignment);
   self->alloc_ptr = self->begin_ptr;
 
-  /* Align and restrict end_ptr to mmap boundary. */
+  /* Restrict end_ptr to mmap boundary. */
   self->end_ptr = self->mmap_addr + self->mmap_size;
-  smal_ALIGN(self->end_ptr, self->object_alignment);
-  if ( self->end_ptr > self->mmap_addr + self->mmap_size )
-    self->end_ptr -= self->object_size;
 
+  /* Compute allowable object_capacity. */
   self->object_capacity = (self->end_ptr - self->begin_ptr) / self->object_size;
+  self->end_ptr = self->begin_ptr + (self->object_capacity * self->object_size);
+  assert(self->end_ptr <= self->mmap_addr + self->mmap_size);
 
   self->mark_bits.size = self->object_capacity;
   if ( smal_bitmap_init(&self->mark_bits) < 0 ) {
@@ -512,7 +526,9 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
     goto done;
   }
 
+  assert(self->stats.avail_n == 0);
   smal_UPDATE_STATS(avail_n, += self->object_capacity);
+  assert(self->stats.avail_n == self->object_capacity);
 
  done:
   smal_debug(2, "  object_size = %d, object_alignment = %d",
@@ -642,10 +658,9 @@ void *smal_buffer_alloc_object(smal_buffer *self)
     assert(buffer_head.stats.free_n > 0);
     smal_UPDATE_STATS(free_n, -= 1);
   } else if ( self->alloc_ptr < self->end_ptr ) {
-
     ptr = self->alloc_ptr;
     self->alloc_ptr += smal_buffer_object_size(self);
-
+    assert(self->alloc_ptr <= self->end_ptr);
     smal_UPDATE_STATS(alloc_n, += 1);
   } else {
     ptr = 0;
@@ -654,10 +669,12 @@ void *smal_buffer_alloc_object(smal_buffer *self)
   if ( ptr ) {
     smal_UPDATE_STATS(alloc_id, += 1);
     smal_UPDATE_STATS(live_n, += 1);
-    assert(buffer_head.stats.avail_n);
+    assert(self->stats.avail_n > 0);
+    assert(self->type->stats.avail_n > 0);
+    assert(buffer_head.stats.avail_n > 0);
     smal_UPDATE_STATS(avail_n, -= 1);
 
-    if ( in_gc )
+    if ( in_collect )
       smal_buffer_mark(self, ptr);
   } else {
     assert(self->stats.avail_n == 0);
@@ -762,7 +779,7 @@ void smal_buffer_pre_mark(smal_buffer *self)
 void smal_each_sweepable_object(int (*func)(smal_type *type, void *ptr, void *arg), void *arg)
 {
   smal_buffer *self;
-  assert(in_gc);
+  assert(in_collect);
 
   smal_dllist_each(&buffer_head, self); {
     void *ptr;
@@ -783,11 +800,11 @@ void _smal_collect_inner()
 
   smal_debug(1, "()");
 
-  if ( in_gc || no_gc ) return;
+  if ( in_collect || no_collect ) return;
 
   smal_collect_before_mark();
 
-  in_gc = 1;
+  ++ in_collect;
 
   smal_dllist_each(&buffer_head, buf); {
     smal_buffer_pre_mark(buf);
@@ -803,7 +820,7 @@ void _smal_collect_inner()
     smal_buffer_sweep(buf);
   } smal_dllist_each_end();
 
-  in_gc = 0;
+  -- in_collect;
 
   smal_collect_after_sweep();
 
@@ -815,30 +832,6 @@ void _smal_collect_inner()
 	    );
 }
 
-void smal_init()
-{
-  const char *s;
-
-  if ( inited )
-    return;
-
-  if ( (s = getenv("SMAL_DEBUG_LEVEL")) ) {
-    smal_debug_level = atoi(s);
-    if ( smal_debug_level > 0 && ! SMAL_DEBUG ) {
-      fprintf(stderr, "SMAL: SMAL_DEBUG not compiled in\n");
-    }
-  }
-
-  if ( ! buffer_head.next )
-    smal_dllist_init(&buffer_head);
-
-  if ( ! type_head.next ) 
-    smal_dllist_init(&type_head);
-
-  inited = 1;
-}
-
-
 /**********************************************/
 
 
@@ -846,9 +839,7 @@ smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free
 {
   smal_type *type;
   
-  if ( ! inited ) {
-    smal_init();
-  }
+  if ( ! inited ) smal_init();
 
   /* must be big enough for free list next pointer. */
   if ( object_size < sizeof(void*) )
@@ -875,6 +866,7 @@ smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free
   type->object_size = object_size;
   type->mark_func = mark_func;
   type->free_func = free_func;
+  smal_dllist_init(&type->buffers);
   smal_dllist_insert(&type_head, type);
 
   return type;
@@ -897,11 +889,13 @@ static
 smal_buffer *smal_type_find_alloc_buffer(smal_type *self)
 {
   smal_buffer *least_avail_buf = 0;
-  smal_buffer *buf;
+  smal_buffer_list *buf_list;
 
-  smal_dllist_each(&buffer_head, buf); {
-    if ( buf->type == self && 
-	 buf->stats.avail_n ) {
+  smal_dllist_each(&self->buffers, buf_list); {
+    smal_buffer *buf = buf_list->buffer;
+    assert(buf);
+    assert(buf->type == self);
+    if ( buf->stats.avail_n ) {
       // fprintf(stderr, "  type %p buf %p avail_n %lu\n", self, buf, buf->stats.avail_n);
       if ( ! least_avail_buf || least_avail_buf->stats.avail_n > buf->stats.avail_n )
 	least_avail_buf = buf;
@@ -932,7 +926,7 @@ void *smal_alloc(smal_type *self)
 {
   void *ptr;
 
-  /* Validate or allocated a smal_buffer. */
+  /* Validate or allocate a smal_buffer. */
   if ( ! smal_type_alloc_buffer(self) )
     return 0;
 
@@ -957,19 +951,17 @@ void *smal_alloc(smal_type *self)
 void smal_free(void *ptr)
 {
   smal_buffer *buf;
+
   if ( (buf = smal_ptr_to_buffer(ptr)) ) {
     smal_debug(5, "ptr %p => buf %p", ptr, buf);
     if ( smal_buffer_ptr_is_validQ(buf, ptr) ) {
       assert(buf->buffer_id == smal_buffer_buffer_id(buf));
       smal_debug(6, "ptr %p is valid in buf %p", ptr, buf);
       smal_buffer_free_object(buf, ptr);
+      return;
     }
-#if 0
-    /* HAVE NOT FULLY MARKED! */
-    if ( ! buf->stats.live_n )
-      smal_buffer_free(buf);
-#endif
   }
+  abort();
 }
 
 /********************************************************************/
@@ -978,10 +970,10 @@ void smal_each_object(void (*func)(smal_type *type, void *ptr, void *arg), void 
 {
   smal_buffer *buf;
 
-  if ( in_gc )
-    return;
+  if ( in_collect ) return;
+  if ( ! inited ) smal_init();
 
-  ++ no_gc;
+  ++ no_collect;
 
   smal_dllist_each(&buffer_head, buf); {
     void *ptr;
@@ -992,7 +984,7 @@ void smal_each_object(void (*func)(smal_type *type, void *ptr, void *arg), void 
     }
   } smal_dllist_each_end();
 
-  -- no_gc;
+  -- no_collect;
 }
 
 void smal_shutdown()
@@ -1000,13 +992,10 @@ void smal_shutdown()
   smal_buffer *buf;
   smal_type *type;
 
-  if ( ! inited )
-    return;
+  if ( ! inited ) return;
+  if ( in_collect ) abort();
 
-  if ( in_gc )
-    abort();
-
-  ++ no_gc;
+  ++ no_collect;
 
   smal_dllist_each(&buffer_head, buf); {
     smal_buffer_free(buf);
@@ -1019,7 +1008,7 @@ void smal_shutdown()
   free(buffer_table);
   buffer_table = 0;
 
-  -- no_gc;
+  -- no_collect;
 
   inited = 0;
 }
@@ -1033,4 +1022,47 @@ void smal_type_stats(smal_type *type, smal_stats *stats)
 {
   *stats = type->stats;
 }
+
+/********************************************************************/
+
+static int initialized;
+static smal_thread_once _initalized = smal_thread_once_INIT;
+static void _initialize()
+{
+  const char *s;
+
+  if ( (s = getenv("SMAL_DEBUG_LEVEL")) ) {
+    smal_debug_level = atoi(s);
+    if ( smal_debug_level > 0 && ! SMAL_DEBUG ) {
+      fprintf(stderr, "SMAL: SMAL_DEBUG not compiled in\n");
+    }
+  }
+
+  memset(&buffer_head, 0, sizeof(buffer_head));
+  smal_dllist_init(&buffer_head);
+  smal_dllist_init(&buffer_head.type_buffer_list);
+
+  memset(&type_head, 0, sizeof(type_head));
+  smal_dllist_init(&type_head);
+
+  buffer_id_min = 0; buffer_id_max = 0;
+  buffer_table_size = 1;
+  buffer_table =   malloc(sizeof(buffer_table[0]) * buffer_table_size);
+  memset(buffer_table, 0, sizeof(buffer_table[0]) * buffer_table_size);
+}
+static void initialize()
+{
+  initialized = 1;
+  smal_thread_do_once(&_initalized, _initialize);
+}
+
+void smal_init()
+{
+  if ( inited )
+    return;
+
+  inited = 1;
+  initialize();
+}
+
 

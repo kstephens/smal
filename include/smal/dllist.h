@@ -6,7 +6,7 @@
 #ifndef _SMAL_DLLIST_H
 #define _SMAL_DLLIST_H
 
-#define smal_dllist_init(X) (X)->next = (X)->prev = (void*) X
+#define smal_dllist_init(X) (X)->next = (X)->prev = (void*) (X)
 
 #define smal_dllist_insert(H,X)			\
   do {						\

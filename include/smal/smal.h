@@ -23,9 +23,12 @@ typedef struct smal_bitmap smal_bitmap;
 struct smal_buffer;
 typedef struct smal_buffer smal_buffer;
 
-typedef struct small_buffer_list {
-  smal_buffer *next, *prev;
-} smal_buffer_list;
+struct smal_buffer_list;
+typedef struct smal_buffer_list smal_buffer_list;
+struct smal_buffer_list {
+  struct smal_buffer_list *next, *prev;
+  smal_buffer *buffer;
+};
 
 struct smal_stats;
 typedef struct smal_stats smal_stats;
@@ -43,6 +46,7 @@ extern const char *smal_stats_names[];
 
 struct smal_type {
   smal_type *next, *prev; /* global list of all smal_types. */
+  smal_buffer_list buffers;
   size_t type_id;
   size_t object_size;
   smal_mark_func mark_func;
@@ -61,7 +65,7 @@ struct smal_bitmap {
 
 struct smal_buffer {
   smal_buffer *next, *prev; /* global list of all smal_buffers. */
-  smal_buffer_list type_list; /* list of all smal_buffers of this buffer's type. */
+  smal_buffer_list type_buffer_list; /* list of all smal_buffers of this buffer's type. */
 
   size_t buffer_id;
   smal_type *type;

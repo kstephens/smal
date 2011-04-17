@@ -9,7 +9,7 @@ CFLAGS_OPT = -O3 #
 CFLAGS_PROF = -pg -DSMAL_PROF #
 CFLAGS_PROF = #
 PTHREAD_CFLAGS = -DSMAL_PTHREAD=1 #
-CFLAGS = $(CFLAGS_OPT) $(CFLAGS_PROF) -g -Wall -Werror $(PTHREAD_CFLAGS) -I$(INC_DIR) -Isrc #
+CFLAGS = $(CFLAGS_OPT) $(CFLAGS_PROF) -g -Wall -Werror -DSMAL_DEBUG=1 $(PTHREAD_CFLAGS) -I$(INC_DIR) -Isrc #
 
 H_FILES := $(shell echo $(INC_DIR)/smal/*.h) #
 C_FILES := $(shell echo src/*.c) src/hash/voidP_voidP_Table.c #
