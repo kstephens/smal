@@ -34,7 +34,6 @@ static void _initialize()
   reference_type = smal_type_for(sizeof(smal_reference), reference_type_mark, reference_type_free);
   reference_queue_type = smal_type_for(sizeof(smal_reference_queue), ref_queue_mark, 0);
 }
-
 static void initialize()
 {
   initialized = 1;
