@@ -32,10 +32,10 @@ void my_print_stats()
   int i;
 
   smal_global_stats(&stats);
-  fprintf(stderr, "\n");
   for ( i = 0; i < sizeof(stats)/sizeof(stats.alloc_id); ++ i ) {
     fprintf(stdout, "  %lu %-16s\n", ((unsigned long*) &stats)[i], smal_stats_names[i]);
   }
+  fprintf(stderr, "\n");
 }
 
 static void *bottom_of_stack;
@@ -84,6 +84,7 @@ int main(int argc, char **argv)
     c->cdr = y;
     y = c;
   }
+  my_print_stats();
 
   fprintf(stderr, "dropping some of x\n");
   {
@@ -109,11 +110,10 @@ int main(int argc, char **argv)
   
   x = y = 0;
   smal_collect();
+  fprintf(stderr, "dereference all\n");
+  my_print_stats();
 
   smal_roots_end();
-  my_print_stats();
-  
-  smal_shutdown();
   
   fprintf(stdout, "\nOK\n");
   

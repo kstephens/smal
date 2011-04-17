@@ -659,6 +659,8 @@ void *smal_buffer_alloc_object(smal_buffer *self)
 
     if ( in_gc )
       smal_buffer_mark(self, ptr);
+  } else {
+    assert(self->stats.avail_n == 0);
   }
 
   smal_debug(4, "(%p) = %p", self, ptr);
@@ -899,7 +901,7 @@ smal_buffer *smal_type_find_alloc_buffer(smal_type *self)
 
   smal_dllist_each(&buffer_head, buf); {
     if ( buf->type == self && 
-	 (buf->free_list || buf->stats.live_n != buf->object_capacity) ) {
+	 buf->stats.avail_n ) {
       // fprintf(stderr, "  type %p buf %p avail_n %lu\n", self, buf, buf->stats.avail_n);
       if ( ! least_avail_buf || least_avail_buf->stats.avail_n > buf->stats.avail_n )
 	least_avail_buf = buf;
