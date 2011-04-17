@@ -3,7 +3,7 @@
 
 == Overview ==
 
-SMAL is simple mark-sweep allocator for small objects.  It's designed to be as minimal, performant and modular as possible.
+SMAL is simple mark-sweep allocator for small objects.  It is designed to be as minimal, performant and modular as possible.
 
 * It is not a drop-in replacement for malloc() and free().
 * It uses only malloc(), free(), mmap(), and munmap().
