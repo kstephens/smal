@@ -41,6 +41,7 @@ static void _initialize()
 static void initialize()
 {
   smal_thread_do_once(&_initalized, _initialize);
+  initialized = 1;
 }
 
 static smal_finalized *find_finalized_by_referred(void *ptr)

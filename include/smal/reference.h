@@ -6,6 +6,8 @@
 #ifndef _SMAL_REFERENCE_H
 #define _SMAL_REFERENCE_H
 
+#include "smal/thread.h"
+
 typedef struct smal_reference smal_reference;
 typedef struct smal_reference_list smal_reference_list;
 typedef struct smal_reference_queue smal_reference_queue;
@@ -15,6 +17,7 @@ struct smal_reference {
   void *referred;
   smal_reference_queue_list *reference_queue_list;
   void *data;
+  smal_thread_mutex mutex;
 };
 
 struct smal_reference_list {
@@ -25,6 +28,7 @@ struct smal_reference_list {
 struct smal_reference_queue {
   smal_reference_list *reference_list;
   void *data;
+  smal_thread_mutex mutex;
 };
 
 struct smal_reference_queue_list {
