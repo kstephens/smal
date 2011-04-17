@@ -31,6 +31,7 @@ typedef struct smal_thread {
   void *bottom_of_stack;
   void *top_of_stack;
   struct { jmp_buf _jb; } registers;
+  void *user_data[4];
 } smal_thread;
 
 void smal_thread_init();
@@ -39,13 +40,19 @@ int smal_thread_getstack(smal_thread *t, void **addrp, size_t *sizep);
 void smal_thread_each(void (*func)(smal_thread *t, void *arg), void *arg);
 
 #if SMAL_PTHREAD
-typedef pthread_mutex_t smal_mutex;
+typedef pthread_once_t smal_thread_once;
+#define smal_thread_once_INIT PTHREAD_ONCE_INIT
+typedef pthread_mutex_t smal_thread_mutex;
 #else
-typedef int smal_mutex;
+typedef int smal_thread_once;
+#define smal_thread_once_INIT 0
+typedef int smal_thread_mutex;
 #endif
 
-void smal_mutex_init(smal_mutex *m);
-int smal_mutex_lock(smal_mutex *m);
-int smal_mutex_unlock(smal_mutex *m);
+int smal_thread_do_once(smal_thread_once *once, void (*init_routine)());
+
+int smal_thread_mutex_init(smal_thread_mutex *m);
+int smal_thread_mutex_lock(smal_thread_mutex *m);
+int smal_thread_mutex_unlock(smal_thread_mutex *m);
 
 #endif

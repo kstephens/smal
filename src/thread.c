@@ -9,6 +9,7 @@
 
 #include <assert.h>
 #include <stdlib.h> /* malloc(), free() */
+#include <string.h> /* memset() */
 #include <stdio.h>
 
 static int thread_inited;
@@ -94,6 +95,7 @@ void thread_child()
   // fprintf(stderr, "  thread_child() %p\n", (void*) pthread_self());
 
   t = malloc(sizeof(*t));
+  memset(t, 0, sizeof(*t));
   thread_init(t);
 
   // fprintf(stderr, "  thread_child() %p = %p\n", (void*) pthread_self(), t);
@@ -125,7 +127,7 @@ void _smal_thread_init()
 
 void smal_thread_init()
 {
-  if ( ! thread_inited ) { /* fast unsafe lock */
+  if ( ! thread_inited ) { /* fast,unsafe lock */
     (void) pthread_once(&_smal_thread_is_initialized, _smal_thread_init);
   }
 }
@@ -168,6 +170,26 @@ void smal_thread_each(void (*func)(smal_thread *t, void *arg), void *arg)
   pthread_mutex_unlock(&thread_list_mutex);
 }
 
+int smal_thread_do_once(smal_thread_once *once, void (*init_routine)())
+{
+  return pthread_once(once, init_routine);
+}
+
+int smal_thread_mutex_init(smal_thread_mutex *mutex)
+{
+  return pthread_mutex_init(mutex, 0);
+}
+
+int smal_thread_mutex_lock(smal_thread_mutex *mutex)
+{
+  return pthread_mutex_lock(mutex);
+}
+
+int smal_thread_mutex_unlock(smal_thread_mutex *mutex)
+{
+  return pthread_mutex_unlock(mutex);
+}
+
 #else
 
 /* NOT THREAD-SAFE */
@@ -192,6 +214,29 @@ int smal_thread_getstack(smal_thread *t, void **addrp, size_t *sizep)
 void smal_thread_each(void (*func)(smal_thread *t, void *arg), void *arg)
 {
   func(&thread_main, arg);
+}
+
+int smal_thread_do_once(smal_thread_once *once, void (*init_routine)())
+{
+  if ( ! *once ) {
+    *once = 1;
+    init_routine();
+  }
+}
+
+int smal_thread_mutex_init(smal_thread_mutex *mutex)
+{
+  return 0;
+}
+
+int smal_thread_mutex_lock(smal_thread_mutex *mutex)
+{
+  return 0;
+}
+
+int smal_thread_mutex_unlock(smal_thread_mutex *mutex)
+{
+  return 0;
 }
 
 #endif

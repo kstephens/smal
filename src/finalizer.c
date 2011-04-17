@@ -5,6 +5,7 @@
 
 #include "smal/smal.h"
 #include "smal/finalizer.h"
+#include "smal/thread.h"
 
 #include <assert.h>
 #include <stdlib.h> /* malloc(), free() */
@@ -18,33 +19,52 @@ struct smal_finalized {
   void *referred;
   smal_finalizer *finalizer_list;
   smal_finalized *next;
+  smal_thread_mutex mutex;
 };
 
 
-static int initialized;
 static voidP_voidP_Table referred_table;
+static smal_thread_mutex referred_table_mutex;
+
+static smal_finalized *finalized_queue;
+static smal_thread_mutex finalized_queue_mutex;
+
+static int initialized;
+static smal_thread_once _initalized = smal_thread_once_INIT;
+static void _initialize()
+{
+  voidP_voidP_TableInit(&referred_table, 8);
+  smal_thread_mutex_init(&referred_table_mutex);
+
+  smal_thread_mutex_init(&finalized_queue_mutex);
+}
+static void initialize()
+{
+  smal_thread_do_once(&_initalized, _initialize);
+}
 
 static smal_finalized *find_finalized_by_referred(void *ptr)
 {
-  void **ptrp;
-  if ( ! initialized ) {
-    voidP_voidP_TableInit(&referred_table, 8);
-    initialized = 1;
-  }
-  if ( (ptrp = voidP_voidP_TableGet(&referred_table, ptr)) )
-    return *ptrp;
-  else
-    return 0;
+  void **ptrp, *finalized;
+  if ( ! initialized ) initialize();
+  smal_thread_mutex_lock(&referred_table_mutex);
+  finalized = (ptrp = voidP_voidP_TableGet(&referred_table, ptr)) ? *ptrp : 0;
+  smal_thread_mutex_unlock(&referred_table_mutex);
+  return finalized;
 }
 
 static void add_finalized(smal_finalized *finalized)
 {
+  smal_thread_mutex_lock(&referred_table_mutex);
   voidP_voidP_TableAdd(&referred_table, finalized->referred, finalized);
+  smal_thread_mutex_unlock(&referred_table_mutex);
 }
 
-static void remove_finalized(smal_finalized *finalized)
+static void remove_finalized(smal_finalized *finalized, int with_lock)
 {
+  if ( with_lock ) smal_thread_mutex_lock(&referred_table_mutex);
   voidP_voidP_TableRemove(&referred_table, finalized->referred);
+  if ( with_lock ) smal_thread_mutex_unlock(&referred_table_mutex);
 }
 
 
@@ -59,11 +79,17 @@ smal_finalizer * smal_finalizer_create(void *ptr, void (*func)(smal_finalizer *f
     finalized->referred = ptr;
     finalized->finalizer_list = 0;
     finalized->next = 0;
+    smal_thread_mutex_init(&finalized->mutex);
+    smal_thread_mutex_lock(&finalized->mutex);
     add_finalized(finalized);
+  } else {
+    smal_thread_mutex_lock(&finalized->mutex);
   }
 
-  if ( ! (finalizer = malloc(sizeof(*finalizer))) )
+  if ( ! (finalizer = malloc(sizeof(*finalizer))) ) {
+    smal_thread_mutex_unlock(&finalized->mutex);
     return 0;
+  }
 
   finalizer->referred = ptr;
   finalizer->func = func;
@@ -72,23 +98,25 @@ smal_finalizer * smal_finalizer_create(void *ptr, void (*func)(smal_finalizer *f
   finalizer->next = finalized->finalizer_list;
   finalized->finalizer_list = finalizer;
 
+  smal_thread_mutex_unlock(&finalized->mutex);
   return finalizer;
 }
-
-static
-smal_finalized *finalized_queue;
 
 static
 void referred_sweeped(smal_finalized *finalized)
 {
   // fprintf(stderr, "    ref %p => %p referred unreachable\n", finalizer, finalizer->referred);
-  /* Prevent sweep this time. */
+  /* Prevent sweep of referred this time around. */
   smal_mark_ptr_exact(finalized->referred);
   /* Forget all finalizers. */
-  remove_finalized(finalized);
+  remove_finalized(finalized, 0);
   /* Add to finalized queue. */
+  smal_thread_mutex_lock(&finalized->mutex);
+  smal_thread_mutex_lock(&finalized_queue_mutex);
   finalized->next = finalized_queue;
   finalized_queue = finalized;
+  smal_thread_mutex_unlock(&finalized_queue_mutex);
+  smal_thread_mutex_unlock(&finalized->mutex);
 }
 
 /*
@@ -100,20 +128,27 @@ void referred_sweeped(smal_finalized *finalized)
 void smal_finalizer_before_sweep()
 {
   voidP_voidP_TableIterator i;
+  if ( ! initialized ) initialize();
+  smal_thread_mutex_lock(&referred_table_mutex);
   voidP_voidP_TableIteratorInit(&referred_table, &i);
   while ( voidP_voidP_TableIteratorNext(&referred_table, &i) ) {
     smal_finalized *finalized = *voidP_voidP_TableIteratorData(&referred_table, &i);
-    if ( ! smal_object_reachableQ(finalized->referred) ) {
+    if ( ! smal_object_reachableQ(finalized->referred) )
       referred_sweeped(finalized);
-    }
   }
+  smal_thread_mutex_unlock(&referred_table_mutex);
 }
 
 void smal_finalizer_after_sweep()
 {
   smal_finalized *finalized;
+  if ( ! initialized ) initialize();
+  smal_thread_mutex_lock(&finalized_queue_mutex);
   while ( (finalized = finalized_queue) ) {
     smal_finalizer *finalizer;
+    smal_finalized *zed = finalized;
+    smal_thread_mutex_unlock(&finalized_queue_mutex);
+    smal_thread_mutex_lock(&zed->mutex);
     while ( (finalizer = finalized->finalizer_list) ) {
       finalizer->func(finalizer);
       finalizer = finalized->finalizer_list->next;
@@ -121,8 +156,11 @@ void smal_finalizer_after_sweep()
       finalized->finalizer_list = finalizer;
     }
     finalized = finalized->next;
+    smal_thread_mutex_unlock(&zed->mutex);
+    smal_thread_mutex_lock(&finalized_queue_mutex);
     free(finalized_queue);
     finalized_queue = finalized;
   }
+  smal_thread_mutex_unlock(&finalized_queue_mutex);
 }
 
