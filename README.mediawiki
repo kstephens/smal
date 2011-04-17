@@ -3,14 +3,15 @@
 
 == Overview ==
 
-SMAL is simple mark-sweep allocator for small objects.  It is designed to be as minimal, performant and modular as possible.
+SMAL is a simple mark-sweep allocator for small objects.  
+It is designed to be as minimal, performant and modular as possible.
 
-* It is not a drop-in replacement for malloc() and free().
-* It uses only malloc(), free(), mmap(), and munmap().
+* It is not a drop-in replacement for <code>malloc()</code> and <code>free()</code>.
+* It uses only <code>malloc()</code>, <code>free()</code>, <code>mmap()</code>, and <code>munmap()</code>.
 * It has no default collection scheduling policy; users must specify when to attempt collection.
 * It has no default root marking policy.
 * Is neither conservative, nor type-safe; users can configure it for both scenarios.
-* It should work in co-operation with any malloc()/free() implementation.
+* It should work in co-operation with any <code>malloc()</code>/<code>free()</code> implementation.
 
 It does, however, optionally support:
 
