@@ -147,6 +147,17 @@ SMAL relies on <code>MAP_ANON</code> <code>mmap()</code>/<code>munmap()</code> a
 thus can co-exist with any other <code>mmap()</code>-based <code>malloc()</code>/<code>free()</code> library.
 SMAL probably cannot co-exist with allocators that use <code>sbrk()</code>.
 
+== Configuration ==
+
+The user must provide the following functions:
+
+* <code>void smal_collect_inner_before(void *top_of_stack);</code>
+* <code>void smal_collect_before_mark();</code>
+* <code>void smal_collect_after_mark();</code>
+* <code>void smal_collect_before_sweep();</code>
+* <code>void smal_collect_after_sweep();</code>
+* <code>void smal_mark_roots();</code>
+
 == Roots ==
 
 The user must provide a <code>smal_mark_roots()</code> function.
