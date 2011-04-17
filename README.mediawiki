@@ -99,7 +99,7 @@ Because the table is guaranteed to be non-colliding, mapping an arbitrary pointe
 This operation takes 6 x86 instructions.
 
 If a <code>smal_buffer*</code> can be found for a potential pointer, the pointer must also be within the <code>smal_buffer</code>'s region between
-<code>begin_ptr</code> and <code>alloc_ptr</code> and must be aligned to <code>object_size</code>.
+<code>begin_ptr</code> and <code>alloc_ptr</code> and must be aligned to <code>object_alignment</code>.
 This operation takes 8 x86 instructions.
 
 === Issues ===
