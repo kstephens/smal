@@ -38,10 +38,15 @@ void smal_mark_roots()
   smal_roots_mark_chain();
 }
 
+static void *expected_finalized_reference = 0;
 static int finalizer_calls = 0;
 static
 void my_cons_finalizer(smal_finalizer *finalizer)
 {
+  if ( expected_finalized_reference ) {
+    assert(expected_finalized_reference == finalizer->referred);
+    expected_finalized_reference = 0;
+  }
   finalizer_calls ++;
 }
 
@@ -74,6 +79,7 @@ int main()
 
   // Direct link to y = 0.
   // assert finalizer was called.
+  expected_finalized_reference = y;
   y = 0;
   smal_collect();
   assert(finalizer_calls == 1);
