@@ -894,18 +894,21 @@ void smal_type_free(smal_type *self)
 static
 smal_buffer *smal_type_find_alloc_buffer(smal_type *self)
 {
-  smal_buffer *most_used = 0;
+  smal_buffer *least_avail_buf = 0;
   smal_buffer *buf;
 
-  /* TODO: Find the smal_buffer that has the least free objects available. */
   smal_dllist_each(&buffer_head, buf); {
-    most_used = buf;
     if ( buf->type == self && 
-	 (buf->free_list || buf->stats.live_n != buf->object_capacity) )
-      return buf;
+	 (buf->free_list || buf->stats.live_n != buf->object_capacity) ) {
+      // fprintf(stderr, "  type %p buf %p avail_n %lu\n", self, buf, buf->stats.avail_n);
+      if ( ! least_avail_buf || least_avail_buf->stats.avail_n > buf->stats.avail_n )
+	least_avail_buf = buf;
+    }
   } smal_dllist_each_end();
 
-  return 0;
+  // fprintf(stderr, "  type %p buf %p avail_n %lu <==== \n", self, least_avail_buf, least_avail_buf ? least_avail_buf->stats.avail_n : 0);
+
+  return least_avail_buf;
 }
 
 static
@@ -916,10 +919,8 @@ smal_buffer *smal_type_alloc_buffer(smal_type *self)
   } else {
     if ( ! (self->alloc_buffer = smal_type_find_alloc_buffer(self)) ) {
       self->alloc_buffer = smal_buffer_alloc(self);
-      if ( (self->alloc_buffer = smal_buffer_alloc(self)) ) {
-      } else {
-	return 0; /* OOM */
-      }
+      /* If 0, out-of-memory */
+      // fprintf(stderr, "  type %p buf %p NEW\n", self, self->alloc_buffer);
     }
   }
   return self->alloc_buffer;
@@ -935,6 +936,8 @@ void *smal_alloc(smal_type *self)
 
   /* If current smal_buffer cannot provide. */
   if ( ! (ptr = smal_buffer_alloc_object(self->alloc_buffer)) ) {
+    // fprintf(stderr, "  type %p buf %p EMPTY\n", self, self->alloc_buffer);
+
     /* Allocate a new smal_buffer. */
     self->alloc_buffer = 0;
     

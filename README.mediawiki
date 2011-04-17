@@ -65,8 +65,6 @@ Objects can be explicitly freed by <code>smal_free</code>.
 
 Since SMAL does not compact or relocate objects during collection, it attempts to allocate from the <code>smal_buffer</code> with the least amount of available objects (either unparceled or on the free list), assocated with the requested <code>smal_type</code>.
 
-'''''THIS IS NOT IMPLEMENTED YET'''''.
-
 == Collection Scheduling ==
 
 SAML has no default collection scheduling algorithm or policy.  Users must decide on when to call <code>smal_collect()</code>.
