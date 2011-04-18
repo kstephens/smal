@@ -596,6 +596,7 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
   assert(self->end_ptr <= self->mmap_addr + self->mmap_size);
 
   smal_thread_mutex_init(&self->mark_bits_mutex);
+  smal_thread_mutex_init(&self->free_bits_mutex);
   smal_thread_mutex_init(&self->free_list_mutex);
 
   self->mark_bits.size = self->object_capacity;
@@ -735,7 +736,9 @@ void *smal_buffer_alloc_object(smal_buffer *self)
     assert(self->stats.free_n > 0);
 
     self->free_list = * (void**) ptr;
+    smal_thread_mutex_lock(&self->free_bits_mutex);
     smal_bitmap_clr_c(&self->free_bits, smal_buffer_i(self, ptr));
+    smal_thread_mutex_unlock(&self->free_bits_mutex);
 
     smal_thread_mutex_unlock(&self->free_list_mutex);
 
@@ -786,16 +789,16 @@ void *smal_buffer_alloc_object(smal_buffer *self)
 static
 void smal_buffer_free_object(smal_buffer *self, void *ptr)
 {
-  smal_thread_mutex_lock(&self->free_list_mutex);
+  // smal_thread_mutex_lock(&self->free_list_mutex);
   smal_bitmap_set_c(&self->free_bits, smal_buffer_i(self, ptr));
-  smal_thread_mutex_unlock(&self->free_list_mutex);
+  // smal_thread_mutex_unlock(&self->free_list_mutex);
 
   self->type->free_func(ptr);
 
-  smal_thread_mutex_lock(&self->free_list_mutex);
+  // smal_thread_mutex_lock(&self->free_list_mutex);
   * ((void**) ptr) = self->free_list;
   self->free_list = ptr;
-  smal_thread_mutex_unlock(&self->free_list_mutex);
+  // smal_thread_mutex_unlock(&self->free_list_mutex);
 
   smal_LOCK_STATS(lock);
   smal_UPDATE_STATS(free_n, += 1);
@@ -833,6 +836,8 @@ void smal_buffer_sweep(smal_buffer *self)
   size_t live_n = 0;
 
   smal_thread_mutex_lock(&self->mark_bits_mutex);
+  smal_thread_mutex_lock(&self->free_bits_mutex);
+  smal_thread_mutex_lock(&self->free_list_mutex);
 
   smal_debug(3, "(%p)", self);
   smal_debug(4, "  mark_bits.set_n = %d", self->mark_bits.set_n);
@@ -843,16 +848,15 @@ void smal_buffer_sweep(smal_buffer *self)
       if ( smal_buffer_markQ(self, ptr) ) {
 	++ live_n;
       } else {
-	if ( ! WITH_MUTEX(&self->free_list_mutex, 
-			  int, 
-			  smal_buffer_freeQ(self, ptr)
-			  ) ) {
+	if ( ! smal_buffer_freeQ(self, ptr) ) {
 	  smal_buffer_free_object(self, ptr);
 	}
       }
     }
   }
 
+  smal_thread_mutex_unlock(&self->free_list_mutex);
+  smal_thread_mutex_unlock(&self->free_bits_mutex);
   smal_thread_mutex_unlock(&self->mark_bits_mutex);
 
   smal_debug(4, "  live_n = %d, stats.free_n = %d",
@@ -946,19 +950,19 @@ void smal_each_sweepable_object(int (*func)(smal_type *type, void *ptr, void *ar
   smal_thread_mutex_lock(&buffer_head_mutex);
   smal_dllist_each(&buffer_head, self); {
     void *ptr, *alloc_ptr = smal_buffer_alloc_ptr(self);
+    smal_thread_mutex_lock(&self->mark_bits_mutex);
+    smal_thread_mutex_lock(&self->free_bits_mutex);
+    smal_thread_mutex_lock(&self->free_list_mutex);
     for ( ptr = self->begin_ptr; ptr < alloc_ptr; ptr += smal_buffer_object_size(self) ) {
-      if ( ! WITH_MUTEX(&self->mark_bits_mutex,
-			int,
-			smal_buffer_markQ(self, ptr)
-			) ) {
-	if ( ! WITH_MUTEX(&self->free_list_mutex,
-			  int,
-			  smal_buffer_freeQ(self, ptr)
-			  ) ) {
+      if ( ! smal_buffer_markQ(self, ptr) ) {
+	if ( ! smal_buffer_freeQ(self, ptr) ) {
 	  func(self->type, ptr, arg);
 	}
       }
     }
+    smal_thread_mutex_unlock(&self->free_list_mutex);
+    smal_thread_mutex_unlock(&self->free_bits_mutex);
+    smal_thread_mutex_unlock(&self->mark_bits_mutex);
   } smal_dllist_each_end();
   smal_thread_mutex_unlock(&buffer_head_mutex);
 }
@@ -1067,8 +1071,6 @@ smal_buffer *smal_type_alloc_buffer(smal_type *self)
 {
   smal_buffer *buf;
 
-  smal_thread_mutex_lock(&self->alloc_buffer_mutex);
-
   // Assume alloc_buffer_mutex is locked.
   if ( (buf = self->alloc_buffer) ) {
     assert(buf->type == self);
@@ -1080,8 +1082,6 @@ smal_buffer *smal_type_alloc_buffer(smal_type *self)
     }
   }
 
-  smal_thread_mutex_unlock(&self->alloc_buffer_mutex);
-
   return buf;
 }
 
@@ -1092,6 +1092,8 @@ void *smal_alloc(smal_type *self)
 
   smal_thread_mutex_lock(&alloc_mutex);
 
+  smal_thread_mutex_lock(&self->alloc_buffer_mutex);
+
   /* Validate or allocate a smal_buffer. */
   if ( ! (alloc_buffer = smal_type_alloc_buffer(self)) )
     goto done;
@@ -1101,9 +1103,7 @@ void *smal_alloc(smal_type *self)
     // fprintf(stderr, "  type %p buf %p EMPTY\n", self, self->alloc_buffer);
 
     /* Allocate a new smal_buffer. */
-    smal_thread_mutex_lock(&self->alloc_buffer_mutex);
     self->alloc_buffer = 0;
-    smal_thread_mutex_unlock(&self->alloc_buffer_mutex);
     
     /* If cannot allocate new smal_buffer, out-of-memory. */
     if ( ! (alloc_buffer = smal_type_alloc_buffer(self)) )
@@ -1114,6 +1114,8 @@ void *smal_alloc(smal_type *self)
   }
 
  done:
+
+  smal_thread_mutex_unlock(&self->alloc_buffer_mutex);
   smal_thread_mutex_unlock(&alloc_mutex);
 
   return ptr;
@@ -1131,7 +1133,11 @@ void smal_free(void *ptr)
     if ( smal_buffer_ptr_is_validQ(buf, ptr) ) {
       assert(buf->buffer_id == smal_buffer_buffer_id(buf));
       smal_debug(6, "ptr %p is valid in buf %p", ptr, buf);
+      smal_thread_mutex_lock(&buf->free_list_mutex);
+      smal_thread_mutex_lock(&buf->free_bits_mutex);
       smal_buffer_free_object(buf, ptr);
+      smal_thread_mutex_unlock(&buf->free_bits_mutex);
+      smal_thread_mutex_unlock(&buf->free_list_mutex);
       error = 0;
     }
   }

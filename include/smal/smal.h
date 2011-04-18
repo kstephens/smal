@@ -95,9 +95,11 @@ struct smal_buffer {
   smal_bitmap mark_bits;
   smal_thread_mutex mark_bits_mutex;
 
+  smal_bitmap free_bits;
+  smal_thread_mutex free_bits_mutex;
+
   void *free_list;
   smal_thread_mutex free_list_mutex;
-  smal_bitmap free_bits;
 };
 
 extern int smal_debug_level;
