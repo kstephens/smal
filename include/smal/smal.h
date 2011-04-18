@@ -44,6 +44,7 @@ struct smal_stats {
   size_t live_before_sweep_n; /* number of objects known to be live before sweep. */
   size_t free_n; /* number of objects on free_list. */
   size_t buffer_n; /* number of buffers active. */
+  size_t mmap_size; /* bytes mmap()ed. */
   smal_thread_mutex _mutex;
 };
 extern const char *smal_stats_names[];

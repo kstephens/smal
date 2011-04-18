@@ -148,6 +148,7 @@ const char *smal_stats_names[] = {
   "live_before_sweep_n",
   "free_n",
   "buffer_n",
+  "mmap_size",
   0
 };
 
@@ -463,7 +464,8 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
     smal_thread_mutex_unlock(&type->buffers_mutex);
 
     smal_LOCK_STATS(lock);
-    smal_UPDATE_STATS(buffer_n, += 1);
+    smal_UPDATE_STATS(buffer_n,  += 1);
+    smal_UPDATE_STATS(mmap_size, += self->mmap_size);
     smal_LOCK_STATS(unlock);
   }
 
@@ -528,16 +530,17 @@ void smal_buffer_free(smal_buffer *self)
 
   smal_LOCK_STATS(lock);
 
+  assert(self->stats.live_n == 0);
+
   smal_UPDATE_STATS(capacity_n, -= self->stats.capacity_n);
   smal_UPDATE_STATS(alloc_n,    -= self->stats.alloc_n);
   smal_UPDATE_STATS(avail_n,    -= self->stats.avail_n);
   smal_UPDATE_STATS(live_n,     -= self->stats.live_n);
   smal_UPDATE_STATS(free_n,     -= self->stats.free_n);
   smal_UPDATE_STATS(buffer_n,   -= 1);
+  smal_UPDATE_STATS(mmap_size,  -= self->mmap_size);
 
   smal_LOCK_STATS(unlock);
-
-  assert(self->stats.live_n == 0);
 
   result = munmap(addr, size);
   smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) addr, (unsigned long) size, (int) result);
