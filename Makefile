@@ -6,13 +6,27 @@ INC_DIR=include/#
 CFLAGS_OPT = -O2 #
 CFLAGS_OPT = -O3 #
 #CFLAGS_OPT = #
+ifneq ($(ENABLE_PROF),)
 CFLAGS_PROF = -pg -DSMAL_PROF #
+else
 CFLAGS_PROF = #
+endif
+ifneq ($(ENABLE_ASSERT),)
 CFLAGS_ASSERT = #
+else
 CFLAGS_ASSERT = -DNASSERT=1 #
+endif
+ifneq ($(ENABLE_DEBUG),)
 CFLAGS_DEBUG = #
-# CFLAGS_DEBUG = -DSMAL_DEBUG=1 #
-# CFLAGS_THREAD = -DSMAL_PTHREAD=1 #
+else
+CFLAGS_DEBUG = -DSMAL_DEBUG=1 #
+endif
+ifneq ($(ENABLE_PTHREAD),)
+CFLAGS_THREAD = -DSMAL_PTHREAD=1 #
+else
+CFLAGS_THREAD = #
+endif
+
 # CFLAGS_THREAD += -DSMAL_THREAD_MUTEX_DEBUG=3 #
 CFLAGS = $(CFLAGS_OPT) $(CFLAGS_PROF) -g -Wall -Werror $(CFLAGS_DEBUG) $(CFLAGS_ASSERT) $(CFLAGS_THREAD) -I$(INC_DIR) -Isrc #
 
@@ -55,10 +69,10 @@ valgrind : all $(TEST_T)
 	done
 
 threaded:
-	CFLAGS_THREAD='-DSMAL_PTHREAD=1' make clean all
+	ENABLE_PTHREAD=1 make clean all
 
 single:
-	CFLAGS_THREAD='' make clean all
+	make clean all
 
 threaded-vs-single:
 	(make threaded && time t/stress_test_2.t; make single && time t/stress_test_2.t) 2>&1 | grep 'real'
