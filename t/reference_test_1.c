@@ -30,7 +30,7 @@ void smal_collect_before_sweep()
   smal_reference_before_sweep();
 }
 void smal_collect_after_sweep() { }
-void smal_mark_roots()
+void smal_collect_mark_roots()
 {
   smal_roots_mark_chain();
 }

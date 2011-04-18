@@ -51,7 +51,7 @@ void smal_collect_before_mark() { }
 void smal_collect_after_mark() { }
 void smal_collect_before_sweep() { }
 void smal_collect_after_sweep() { }
-void smal_mark_roots()
+void smal_collect_mark_roots()
 {
   smal_thread *thr = smal_thread_self();
   smal_mark_ptr_range(&thr->registers, &thr->registers + 1);

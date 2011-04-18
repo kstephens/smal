@@ -154,11 +154,11 @@ The user must provide the following functions:
 * <code>void smal_collect_after_mark();</code>
 * <code>void smal_collect_before_sweep();</code>
 * <code>void smal_collect_after_sweep();</code>
-* <code>void smal_mark_roots();</code>
+* <code>void smal_collect_mark_roots();</code>
 
 == Roots ==
 
-The user must provide a <code>smal_mark_roots()</code> function.
+The user must provide a <code>smal_collect_mark_roots()</code> function.
 This allows the user to configure and optimize for different environments:
 * single-threaded vs. multi-threaded
 * conservative vs. type-safe 

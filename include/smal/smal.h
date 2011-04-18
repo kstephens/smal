@@ -124,7 +124,7 @@ void smal_collect_before_mark();
 void smal_collect_after_mark();
 void smal_collect_before_sweep();
 void smal_collect_after_sweep();
-void smal_mark_roots(); /* TODO: rename this to smal_collect_mark_roots(). */
+void smal_collect_mark_roots();
 
 /* Low-level/extension functions */
 int smal_object_reachableQ(void *ptr);

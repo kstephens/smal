@@ -881,7 +881,7 @@ void _smal_collect_inner()
   } smal_dllist_each_end();
   smal_thread_mutex_unlock(&buffer_head_mutex);
 
-  smal_mark_roots();
+  smal_collect_mark_roots();
 
   smal_collect_after_mark();
 

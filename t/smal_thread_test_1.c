@@ -8,10 +8,6 @@
 #include <unistd.h>
 #include <stdio.h>
 
-void smal_mark_roots()
-{
-}
-
 static void print_thread(smal_thread *t, void *arg)
 {
   fprintf(stderr, "  t %p\n", t);

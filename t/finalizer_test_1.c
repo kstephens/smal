@@ -33,7 +33,7 @@ void smal_collect_after_sweep()
 {
   smal_finalizer_after_sweep();
 }
-void smal_mark_roots()
+void smal_collect_mark_roots()
 {
   smal_roots_mark_chain();
 }
