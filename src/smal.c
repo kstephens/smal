@@ -730,7 +730,7 @@ void *smal_buffer_alloc_object(smal_buffer *self)
 
       smal_UPDATE_STATS(alloc_n, += 1);
     } else {
-      ptr = 0;
+      ptr = 0; /* buffer is full. */
     }
     smal_thread_mutex_unlock(&self->alloc_ptr_mutex);
   }
@@ -743,7 +743,7 @@ void *smal_buffer_alloc_object(smal_buffer *self)
     assert(buffer_head.stats.avail_n > 0);
     smal_UPDATE_STATS(avail_n, -= 1);
 
-    if ( in_collect )
+    if ( in_collect ) /* should this really be optional? */
       smal_buffer_mark(self, ptr);
   } else {
     assert(self->stats.avail_n == 0);
@@ -977,6 +977,8 @@ void smal_type_free(smal_type *self)
 {
   smal_buffer_list *buf_list;
 
+  smal_thread_mutex_lock(&type_head_mutex);
+
   smal_thread_mutex_lock(&self->buffers_mutex);
   smal_dllist_each(&self->buffers, buf_list); {
     smal_buffer *buf = buf_list->buffer;
@@ -985,7 +987,6 @@ void smal_type_free(smal_type *self)
   } smal_dllist_each_end();
   smal_thread_mutex_unlock(&self->buffers_mutex);
 
-  smal_thread_mutex_lock(&type_head_mutex);
   smal_dllist_delete(self);
   smal_thread_mutex_unlock(&type_head_mutex);
 
@@ -1026,25 +1027,30 @@ smal_buffer *smal_type_find_alloc_buffer(smal_type *self)
 static
 smal_buffer *smal_type_alloc_buffer(smal_type *self)
 {
+  smal_buffer *buf;
+
+  smal_thread_mutex_lock(&self->alloc_buffer_mutex);
+
   // Assume alloc_buffer_mutex is locked.
-  if ( self->alloc_buffer ) {
-    assert(self->alloc_buffer->type == self);
+  if ( (buf = self->alloc_buffer) ) {
+    assert(buf->type == self);
   } else {
-    if ( ! (self->alloc_buffer = smal_type_find_alloc_buffer(self)) ) {
-      self->alloc_buffer = smal_buffer_alloc(self);
+    if ( ! (buf = self->alloc_buffer = smal_type_find_alloc_buffer(self)) ) {
+      buf = self->alloc_buffer = smal_buffer_alloc(self);
       /* If 0, out-of-memory */
-      // fprintf(stderr, "  type %p buf %p NEW\n", self, self->alloc_buffer);
+      // fprintf(stderr, "  type %p buf %p NEW\n", self, buf);
     }
   }
-  return self->alloc_buffer;
+
+  smal_thread_mutex_unlock(&self->alloc_buffer_mutex);
+
+  return buf;
 }
 
 void *smal_alloc(smal_type *self)
 {
   void *ptr = 0;
   smal_buffer *alloc_buffer;
-
-  smal_thread_mutex_lock(&self->alloc_buffer_mutex);
 
   /* Validate or allocate a smal_buffer. */
   if ( ! (alloc_buffer = smal_type_alloc_buffer(self)) )
@@ -1055,7 +1061,9 @@ void *smal_alloc(smal_type *self)
     // fprintf(stderr, "  type %p buf %p EMPTY\n", self, self->alloc_buffer);
 
     /* Allocate a new smal_buffer. */
+    smal_thread_mutex_lock(&self->alloc_buffer_mutex);
     self->alloc_buffer = 0;
+    smal_thread_mutex_unlock(&self->alloc_buffer_mutex);
     
     /* If cannot allocate new smal_buffer, out-of-memory. */
     if ( ! (alloc_buffer = smal_type_alloc_buffer(self)) )
@@ -1066,7 +1074,6 @@ void *smal_alloc(smal_type *self)
   }
 
  done:
-  smal_thread_mutex_unlock(&self->alloc_buffer_mutex);
 
   return ptr;
 }
