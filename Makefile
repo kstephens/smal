@@ -54,5 +54,12 @@ valgrind : all $(TEST_T)
 	  time valgrind $$t || gdb --args $$t ;\
 	done
 
+threaded:
+	CFLAGS_THREAD='-DSMAL_PTHREAD=1' make clean all
+
+single:
+	CFLAGS_THREAD='' make clean all
+
 threaded-vs-single:
-	(CFLAGS_THREAD='-DSMAL_PTHREAD=1' make clean all && time t/stress_test_2.t; make clean all && time t/stress_test_2.t) 2>&1 | grep 'real'
+	(make threaded && time t/stress_test_2.t; make single && time t/stress_test_2.t) 2>&1 | grep 'real'
+

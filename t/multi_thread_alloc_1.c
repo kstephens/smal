@@ -9,7 +9,7 @@
 
 #include "my_cons.h"
 
-static size_t alloc_n = 4000;
+static size_t alloc_n = 100000;
 
 static void* thread_func(void *arg)
 {
