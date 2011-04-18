@@ -7,6 +7,7 @@
 #define SMAL_SMAL_H
 
 #include <stddef.h>
+#include "smal/thread.h"
 
 #define smal_alignedQ(ptr,align) (((size_t)(ptr) % (align)) == 0)
 #define smal_ALIGN(ptr,align) if ( (size_t)(ptr) % (align) ) (ptr) += (align) - ((size_t)(ptr) % (align))
@@ -41,17 +42,20 @@ struct smal_stats {
   size_t live_n; /* number of objects known to be live. */
   size_t free_n; /* number of objects on free_list. */
   size_t buffer_n; /* number of buffers active. */
+  smal_thread_mutex _mutex;
 };
 extern const char *smal_stats_names[];
 
 struct smal_type {
   smal_type *next, *prev; /* global list of all smal_types. */
   smal_buffer_list buffers;
+  smal_thread_mutex buffers_mutex;
   size_t type_id;
   size_t object_size;
   smal_mark_func mark_func;
   smal_free_func free_func;
   smal_buffer *alloc_buffer;
+  smal_thread_mutex alloc_buffer_mutex;
   smal_stats stats;
 };
 
@@ -80,12 +84,15 @@ struct smal_buffer {
   void *begin_ptr; /* start of object allocations. */
   void *end_ptr; /* alloc_ptr guard. */
   void *alloc_ptr; /* next location to allocate an object. */
+  smal_thread_mutex alloc_ptr_mutex;
 
   smal_stats stats;
 
   smal_bitmap mark_bits;
+  smal_thread_mutex mark_bits_mutex;
 
   void *free_list;
+  smal_thread_mutex free_list_mutex;
   smal_bitmap free_bits;
 };
 

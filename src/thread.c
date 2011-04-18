@@ -200,7 +200,7 @@ void smal_thread_init()
   /* NOTHING */
 }
 
-smal_roots *smal_roots_self()
+smal_thread *smal_thread_self()
 {
   return &thread_main;
 }
@@ -222,20 +222,38 @@ int smal_thread_do_once(smal_thread_once *once, void (*init_routine)())
     *once = 1;
     init_routine();
   }
+  return 0;
 }
+
+#ifdef  SMAL_THREAD_MUTEX_DEBUG
+#define SMAL_THREAD_MUTEX_DEBUG 0
+#endif
 
 int smal_thread_mutex_init(smal_thread_mutex *mutex)
 {
+  *mutex = 0;
   return 0;
 }
 
 int smal_thread_mutex_lock(smal_thread_mutex *mutex)
 {
+#if SMAL_THREAD_MUTEX_DEBUG
+  fprintf(stderr, "  s_t_m_l(%p) {\n", mutex);
+#endif
+  if ( *mutex )
+    abort();
+  ++ *mutex;
   return 0;
 }
 
 int smal_thread_mutex_unlock(smal_thread_mutex *mutex)
 {
+#if SMAL_THREAD_MUTEX_DEBUG
+  fprintf(stderr, "  s_t_m_u(%p) }\n", mutex);
+#endif
+  if ( ! *mutex )
+    abort();
+  -- *mutex;
   return 0;
 }
 

@@ -19,7 +19,13 @@ static void print_thread(smal_thread *t, void *arg)
 
 static void* thread_func(void *arg)
 {
-  fprintf(stderr, "  child thread %p pthread %p \n", smal_thread_self(), (void*) pthread_self());
+  fprintf(stderr, "  child thread %p pthread %p \n", smal_thread_self(),
+#if SMAL_PTHREAD
+	  (void*) pthread_self()
+#else
+	  (void*) 0
+#endif
+	  );
   {
     void *stack_ptr = 0; 
     size_t stack_size = 0;
@@ -33,7 +39,7 @@ static void* thread_func(void *arg)
 
 int main()
 {
-  void *thread_result;
+  void *thread_result = 0;
 #if SMAL_PTHREAD
   static pthread_t child_thread;
 #endif
@@ -50,6 +56,8 @@ int main()
   fprintf(stderr, "  parent thread %p = pthread %p\n", smal_thread_self(), (void*) pthread_self());
   pthread_create(&child_thread, 0, thread_func, 0);
   fprintf(stderr, "  parent thread %p forked child pthread %p\n", smal_thread_self(), (void*) child_thread);
+#else
+  thread_result = thread_func;
 #endif
 
   sleep(1);

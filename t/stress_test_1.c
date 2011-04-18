@@ -32,8 +32,8 @@ void my_print_stats()
   int i;
 
   smal_global_stats(&stats);
-  for ( i = 0; i < sizeof(stats)/sizeof(stats.alloc_id); ++ i ) {
-    fprintf(stdout, "  %d %lu\n", i, ((unsigned long*) &stats)[i]);
+  for ( i = 0; smal_stats_names[i]; ++ i ) {
+    fprintf(stdout, "  %16lu %s\n", (unsigned long) (((size_t*) &stats)[i]), smal_stats_names[i]);
   }
 }
 
