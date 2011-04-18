@@ -3,9 +3,11 @@
   Copyright (c) 2011 Kurt A. Stephens
 */
 
-#include "my_cons.h"
+#include "smal/smal.h"
 
 #if SMAL_PTHREAD
+
+#include "my_cons.h"
 
 static size_t alloc_n = 4000;
 
@@ -60,9 +62,11 @@ int main(int argc, char **argv)
 
 #else
 
+#include <stdio.h>
+
 int main(int argc, char **argv)
 {
-  fprintf(stderr, "skipping %s\n", ___FILE__);
+  fprintf(stderr, "skipping %s\n", __FILE__);
   return 0;
 }
 

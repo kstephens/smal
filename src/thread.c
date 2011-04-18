@@ -278,7 +278,7 @@ int smal_thread_mutex_init(smal_thread_mutex *mutex)
 
 int smal_thread_mutex_lock(smal_thread_mutex *mutex)
 {
-  int result;
+  int result = 0;
 
 #if SMAL_THREAD_MUTEX_DEBUG >= 3
   fprintf(stderr, "\n  t@%p s_t_m_l %p ...\n", smal_thread_self(), mutex);
