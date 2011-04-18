@@ -3,33 +3,8 @@
   Copyright (c) 2011 Kurt A. Stephens
 */
 
-#include "smal/smal.h"
-#include "smal/explicit_roots.h"
-#include <stdio.h>
-#include <assert.h>
-
-typedef void *my_oop;
-typedef struct my_cons {
-  my_oop car, cdr;
-} my_cons;
-
-static smal_type *my_cons_type;
-
-static void my_cons_mark (void *ptr)
-{
-  smal_mark_ptr(((my_cons *) ptr)->car);
-  smal_mark_ptr(((my_cons *) ptr)->cdr);
-}
-
-void smal_collect_before_inner(void *tos) { }
-void smal_collect_before_mark() { }
-void smal_collect_after_mark() { }
-void smal_collect_before_sweep() { }
-void smal_collect_after_sweep() { }
-void smal_collect_mark_roots()
-{
-  smal_roots_mark_chain();
-}
+#include "my_cons.h"
+#include "roots_explicit.h"
 
 static
 void count_object(smal_type *type, void *ptr, void *arg)
