@@ -18,6 +18,22 @@
 #undef smal_thread_mutex_unlock
 #endif
 
+#if SMAL_THREAD_MUTEX_DEBUG
+static size_t mutex_n, mutex_lock_n, mutex_unlock_n;
+#endif
+#if SMAL_THREAD_MUTEX_DEBUG >= 1
+static
+void mutex_stats()
+{
+  fprintf(stderr,
+	  "\nsmal mutex stats:\n  %16lu mutex_n \n  %16lu mutex_lock_n\n  %16lu mutex_unlock_n\n\n", 
+	  (unsigned long) mutex_n,
+	  (unsigned long) mutex_lock_n,
+	  (unsigned long) mutex_unlock_n
+	  );
+}
+#endif
+
 static int thread_inited;
 static smal_thread thread_main;
 
@@ -41,7 +57,7 @@ int _smal_thread_getstack_main(smal_thread *t, void **addrp, size_t *sizep)
     *addrp = bottom_of_stack;
     *sizep = top_of_stack - bottom_of_stack;
   }
-  fprintf(stderr, "  %p getstack: %p[0x%lx] %p\n", t, *addrp, (unsigned long) *sizep, *addrp + *sizep);
+  // fprintf(stderr, "  %p getstack: %p[0x%lx] %p\n", t, *addrp, (unsigned long) *sizep, *addrp + *sizep);
   return 0;
 }
 
@@ -127,6 +143,10 @@ void _smal_thread_init()
 
     thread_init(&thread_main);
 
+#if SMAL_THREAD_MUTEX_DEBUG >= 1
+    atexit(mutex_stats);
+#endif
+
     thread_inited = 1;
   }
 }
@@ -136,12 +156,19 @@ void smal_thread_init()
   if ( ! thread_inited ) { /* fast,unsafe lock */
     (void) pthread_once(&_smal_thread_is_initialized, _smal_thread_init);
   }
+#if SMAL_THREAD_MUTEX_DEBUG >= 2
+  static int once;
+  if ( ! once ) {
+    once = 1;
+    atexit(mutex_stats);
+  }
+#endif
+
 }
 
 smal_thread *smal_thread_self()
 {
-  if ( ! thread_inited )
-    smal_thread_init();
+  if ( ! thread_inited ) smal_thread_init();
 
   {
     smal_thread *t = pthread_getspecific(roots_key);
@@ -181,22 +208,7 @@ int smal_thread_do_once(smal_thread_once *once, void (*init_routine)())
   return pthread_once(once, init_routine);
 }
 
-int smal_thread_mutex_init(smal_thread_mutex *mutex)
-{
-  return pthread_mutex_init(mutex, 0);
-}
-
-int smal_thread_mutex_lock(smal_thread_mutex *mutex)
-{
-  return pthread_mutex_lock(mutex);
-}
-
-int smal_thread_mutex_unlock(smal_thread_mutex *mutex)
-{
-  return pthread_mutex_unlock(mutex);
-}
-
-#else
+#else /* ! SMAL_THREAD */
 
 /* NOT THREAD-SAFE */
 
@@ -231,52 +243,65 @@ int smal_thread_do_once(smal_thread_once *once, void (*init_routine)())
   return 0;
 }
 
-#if SMAL_THREAD_MUTEX_DEBUG
-static size_t mutex_n, mutex_lock_n, mutex_unlock_n;
-#endif
-
-#if SMAL_THREAD_MUTEX_DEBUG >= 1
-static
-void mutex_stats()
-{
-  fprintf(stderr,
-	  "\nsmal mutex stats:\n  %16lu mutex_n \n  %16lu mutex_lock_n\n  %16lu mutex_unlock_n\n\n", 
-	  (unsigned long) mutex_n,
-	  (unsigned long) mutex_lock_n,
-	  (unsigned long) mutex_unlock_n
-	  );
-}
 #endif
 
 int smal_thread_mutex_init(smal_thread_mutex *mutex)
 {
 #if SMAL_THREAD_MUTEX_DEBUG >= 2
+#if SMAL_PTHREAD
+  if ( ! thread_inited ) smal_thread_init();
+#else
   static int once;
   if ( ! once ) {
     once = 1;
     atexit(mutex_stats);
   }
 #endif
+#endif
 
 #if SMAL_THREAD_MUTEX_DEBUG
   ++ mutex_n;
+#if SMAL_THREAD_MUTEX_DEBUG >= 3
+  fprintf(stderr, "\n  t@%p s_t_m_i(%p) = %lu\n", smal_thread_self(), mutex, (unsigned long) mutex_n);
+#endif
+#if ! SMAL_PTHREAD
   *mutex = 0;
 #endif
+#endif
+
+#if SMAL_PTHREAD
+  return pthread_mutex_init(mutex, 0);
+#else
   return 0;
+#endif
 }
 
 int smal_thread_mutex_lock(smal_thread_mutex *mutex)
 {
+  int result;
+
+#if SMAL_THREAD_MUTEX_DEBUG >= 3
+  fprintf(stderr, "\n  t@%p s_t_m_l %p ...\n", smal_thread_self(), mutex);
+#endif
+
+#if SMAL_PTHREAD
+  result = pthread_mutex_lock(mutex);
+#endif
+
 #if SMAL_THREAD_MUTEX_DEBUG
   ++ mutex_lock_n;
 #if SMAL_THREAD_MUTEX_DEBUG >= 3
-  fprintf(stderr, "  s_t_m_l(%p) {\n", mutex);
+  fprintf(stderr, "\n  t@%p s_t_m_l %p {\n", smal_thread_self(), mutex);
 #endif
+#if ! SMAL_PTHREAD
   if ( *mutex )
     abort();
   ++ *mutex;
+  result = 0;
 #endif
-  return 0;
+#endif
+
+  return result;
 }
 
 int smal_thread_mutex_unlock(smal_thread_mutex *mutex)
@@ -284,14 +309,20 @@ int smal_thread_mutex_unlock(smal_thread_mutex *mutex)
 #if SMAL_THREAD_MUTEX_DEBUG
   ++ mutex_unlock_n;
 #if SMAL_THREAD_MUTEX_DEBUG >= 3
-  fprintf(stderr, "  s_t_m_u(%p) }\n", mutex);
+  fprintf(stderr, "\n  t@%p s_t_m_u %p  }\n", smal_thread_self(), mutex);
 #endif
+#if ! SMAL_PTHREAD
   if ( ! *mutex )
     abort();
   -- *mutex;
 #endif
+#endif
+
+#if SMAL_PTHREAD
+  return pthread_mutex_unlock(mutex);
+#else
   return 0;
+#endif
 }
 
-#endif
 

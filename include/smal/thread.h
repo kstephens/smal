@@ -60,13 +60,15 @@ int smal_thread_mutex_lock(smal_thread_mutex *m);
 int smal_thread_mutex_unlock(smal_thread_mutex *m);
 
 #if SMAL_PTHREAD
-#define smal_thread_mutex_init(M) pthread_mutex_init(M, 0)
-#define smal_thread_mutex_lock(M) pthread_mutex_lock(M)
+#if ! SMAL_THREAD_MUTEX_DEBUG
+#define smal_thread_mutex_init(M)   pthread_mutex_init(M, 0)
+#define smal_thread_mutex_lock(M)   pthread_mutex_lock(M)
 #define smal_thread_mutex_unlock(M) pthread_mutex_unlock(M)
+#endif
 #else
 #if ! SMAL_THREAD_MUTEX_DEBUG
-#define smal_thread_mutex_init(M) (void) (M)
-#define smal_thread_mutex_lock(M) (void) (M)
+#define smal_thread_mutex_init(M)   (void) (M)
+#define smal_thread_mutex_lock(M)   (void) (M)
 #define smal_thread_mutex_unlock(M) (void) (M)
 #endif
 #endif
