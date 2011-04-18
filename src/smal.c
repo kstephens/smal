@@ -530,8 +530,6 @@ void smal_buffer_free(smal_buffer *self)
 
   smal_LOCK_STATS(lock);
 
-  assert(self->stats.live_n == 0);
-
   smal_UPDATE_STATS(capacity_n, -= self->stats.capacity_n);
   smal_UPDATE_STATS(alloc_n,    -= self->stats.alloc_n);
   smal_UPDATE_STATS(avail_n,    -= self->stats.avail_n);
@@ -728,15 +726,16 @@ int smal_object_reachableQ(void *ptr)
 void *smal_buffer_alloc_object(smal_buffer *self)
 {
   void *ptr;
+  int free_n = 0;
+  int alloc_n = 0;
 
   if ( WITH_MUTEX(&self->alloc_disabled_mutex, int, self->alloc_disabled) )
     return 0;
-
-  smal_LOCK_STATS(lock);
+  
   smal_thread_mutex_lock(&self->free_list_mutex);
   if ( (ptr = self->free_list) ) {
     // fprintf(stderr, "  t@%p b@%p free_n %lu => @%p\n", smal_thread_self(), self, (unsigned long) self->stats.free_n, ptr);
-    assert(self->stats.free_n > 0);
+    free_n = 1;
 
     self->free_list = * (void**) ptr;
     smal_thread_mutex_lock(&self->free_bits_mutex);
@@ -745,28 +744,32 @@ void *smal_buffer_alloc_object(smal_buffer *self)
 
     smal_thread_mutex_unlock(&self->free_list_mutex);
 
-    assert(buffer_head.stats.free_n > 0);
-    smal_UPDATE_STATS(free_n, -= 1);
-  
   } else {
     smal_thread_mutex_unlock(&self->free_list_mutex);
 
     smal_thread_mutex_lock(&self->alloc_ptr_mutex);
     if ( self->alloc_ptr < self->end_ptr ) {
+      alloc_n = 1;
       ptr = self->alloc_ptr;
       self->alloc_ptr += smal_buffer_object_size(self);
       assert(self->alloc_ptr <= self->end_ptr);
-
-      smal_UPDATE_STATS(alloc_n, += 1);
     } else {
       ptr = 0; /* buffer is full. */
     }
     smal_thread_mutex_unlock(&self->alloc_ptr_mutex);
   }
 
+  smal_LOCK_STATS(lock);
   if ( ptr ) {
     smal_UPDATE_STATS(alloc_id, += 1);
     smal_UPDATE_STATS(live_n, += 1);
+    if ( free_n ) {
+      assert(buffer_head.stats.free_n > 0);
+      smal_UPDATE_STATS(free_n, -= 1);
+    }
+    else if ( alloc_n ) {
+      smal_UPDATE_STATS(alloc_n, += 1);
+    }
     assert(self->stats.avail_n > 0);
     assert(self->type->stats.avail_n > 0);
     assert(buffer_head.stats.avail_n > 0);
