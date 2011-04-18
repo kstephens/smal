@@ -27,7 +27,7 @@ static void initialize()
   smal_thread_do_once(&_initalized, _initialize);
 }
 
-int smal_root_add_global(smal_roots *roots)
+int smal_roots_add_global(smal_roots *roots)
 {
   int result = -1;
   smal_roots *r = 0;
