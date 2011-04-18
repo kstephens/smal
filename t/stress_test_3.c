@@ -112,6 +112,13 @@ int main(int argc, char **argv)
   smal_collect();
   fprintf(stderr, "dereference all\n");
   my_print_stats();
+  {
+    smal_stats stats = { 0 };
+    smal_global_stats(&stats);
+    assert(stats.alloc_id == stats.free_id);
+    assert(stats.capacity_n == 0);
+    assert(stats.buffer_n == 0);
+  }
 
   smal_roots_end();
   

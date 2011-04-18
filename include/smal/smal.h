@@ -26,6 +26,14 @@ typedef struct smal_buffer smal_buffer;
 
 struct smal_buffer_list;
 typedef struct smal_buffer_list smal_buffer_list;
+
+struct smal_buffer_list_head;
+typedef struct smal_buffer_list_head smal_buffer_list_head;
+
+struct smal_buffer_list_head {
+  smal_buffer *next, *prev;
+};
+
 struct smal_buffer_list {
   struct smal_buffer_list *next, *prev;
   smal_buffer *buffer;
@@ -134,9 +142,6 @@ void smal_collect_mark_roots();
 
 /* Low-level/extension functions */
 int smal_object_reachableQ(void *ptr);
-
-/* Can be called only from within smal_collect_*() callbacks. */
-void smal_each_sweepable_object(int (*func)(smal_type *type, void *ptr, void *arg), void *arg);
 
 #endif
 

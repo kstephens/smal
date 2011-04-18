@@ -197,6 +197,9 @@ static smal_thread_mutex type_head_mutex;
 static smal_buffer buffer_head;
 static smal_thread_mutex buffer_head_mutex;
 
+static smal_buffer_list_head buffer_collecting;
+static smal_thread_mutex buffer_collecting_mutex;
+
 static size_t buffer_id_min, buffer_id_max;
 static smal_thread_mutex buffer_id_min_max_mutex;
 
@@ -257,6 +260,24 @@ void null_func(void *ptr)
    smal_buffer_ptr_is_in_rangeQ(BUF, PTR)   \
 					    )
 
+#if 0
+static
+void smal_buffer_print_all(smal_buffer *self, const char *action)
+{
+  smal_buffer *buf;
+  fprintf(stderr, "  %s @%p: buffer_head { ", action, self);
+  smal_dllist_each(&buffer_head, buf); {
+    fprintf(stderr, " @%p, ", buf);
+  } smal_dllist_each_end();
+  fprintf(stderr, "}\n");
+  fprintf(stderr, "  %s @%p: buffer_collecting { ", action, self);
+  smal_dllist_each(&buffer_collecting, buf); {
+    fprintf(stderr, " @%p, ", buf);
+  } smal_dllist_each_end();
+  fprintf(stderr, "}\n");
+}
+#endif
+
 static
 void smal_buffer_table_add(smal_buffer *self)
 {
@@ -266,9 +287,10 @@ void smal_buffer_table_add(smal_buffer *self)
   
   // fprintf(stderr, "smal_buffer_table_add(%p)\n", self);
 
-  /* buffer_id_min and buffer_id_max is stale. */
+  /* Recompute buffer_id_min, buffer_id_max */
   smal_thread_mutex_lock(&buffer_id_min_max_mutex);
 
+  /* buffer_id_min and buffer_id_max is stale. */
   if ( buffer_id_min == 0 && buffer_id_max == 0 ) {
     smal_buffer *buf;
     buffer_id_min = buffer_id_max = _smal_buffer_buffer_id(self);
@@ -280,6 +302,15 @@ void smal_buffer_table_add(smal_buffer *self)
 	buffer_id_max = buf->buffer_id;
     } smal_dllist_each_end();
     smal_thread_mutex_unlock(&buffer_head_mutex);
+
+    smal_thread_mutex_lock(&buffer_collecting_mutex);
+    smal_dllist_each(&buffer_collecting, buf); {
+      if ( buffer_id_min > buf->buffer_id )
+	buffer_id_min = buf->buffer_id;
+      if ( buffer_id_max < buf->buffer_id )
+	buffer_id_max = buf->buffer_id;
+    } smal_dllist_each_end();
+    smal_thread_mutex_unlock(&buffer_collecting_mutex);
 
   } else {
     if ( buffer_id_min > self->buffer_id )
@@ -320,8 +351,11 @@ void smal_buffer_table_add(smal_buffer *self)
   assert(! buffer_table[i]);
   buffer_table[i] = self;
 
+  // Assume buffer_head is locked.
+  smal_dllist_init(self);
   smal_dllist_insert(&buffer_head, self);
-
+  // smal_buffer_print_all(self, "add");
+  
   smal_debug(3, "buffer_table_size = %d", (int) buffer_table_size);
 }
 
@@ -338,6 +372,8 @@ void smal_buffer_table_remove(smal_buffer *self)
 
   // smal_thread_mutex_lock(&buffer_head_mutex);
   smal_dllist_delete(self); /* Remove from global buffer list. */
+  // smal_buffer_print_all(self, "remove");
+
   // smal_thread_mutex_unlock(&buffer_head_mutex);
 
   /* Adjust buffer_table window. */
@@ -447,7 +483,6 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
   self->mmap_addr = addr;
   self->mmap_size = size;
   self->begin_ptr = self + 1;
-  smal_dllist_init(&self->type_buffer_list);
   self->type_buffer_list.buffer = self;
   smal_thread_mutex_init(&self->stats._mutex);
 
@@ -460,6 +495,7 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
     smal_buffer_table_add(self);
 
     smal_thread_mutex_lock(&type->buffers_mutex);
+    smal_dllist_init(&self->type_buffer_list);
     smal_dllist_insert(&type->buffers, &self->type_buffer_list);
     smal_thread_mutex_unlock(&type->buffers_mutex);
 
@@ -916,11 +952,23 @@ void _smal_collect_inner()
   smal_thread_mutex_lock(&alloc_mutex);
 
   smal_thread_mutex_lock(&buffer_head_mutex);
-  smal_dllist_each(&buffer_head, buf); {
+  smal_thread_mutex_lock(&buffer_collecting_mutex);
+
+  /* Move all active buffers to buffer_collecting. */
+  smal_dllist_append(&buffer_collecting, &buffer_head);
+  // smal_buffer_print_all(0, "buffer_head -> buffer_collecting");
+  assert(buffer_head.next == (void *) &buffer_head);
+  assert(buffer_head.prev == (void *) &buffer_head);
+
+  /* Pause collecting for each buffer, prepare for marking. */
+  smal_dllist_each(&buffer_collecting, buf); {
     smal_buffer_before_mark(buf);
   } smal_dllist_each_end();
+
+  smal_thread_mutex_unlock(&buffer_collecting_mutex);
   smal_thread_mutex_unlock(&buffer_head_mutex);
 
+  /* Allocation can resume in other threads, using new blocks. */
   smal_thread_mutex_unlock(&alloc_mutex);
 
   // Mark roots.
@@ -930,15 +978,23 @@ void _smal_collect_inner()
 
   smal_collect_after_mark();
 
-  // Begin sweep.
+  /* Begin sweep. */
   smal_collect_before_sweep();
 
-  smal_thread_mutex_lock(&buffer_head_mutex);
+  smal_thread_mutex_lock(&buffer_collecting_mutex);
   ++ in_sweep;
-  smal_dllist_each(&buffer_head, buf); {
+  smal_dllist_each(&buffer_collecting, buf); {
     smal_buffer_sweep(buf);
   } smal_dllist_each_end();
   -- in_sweep;
+  smal_thread_mutex_unlock(&buffer_collecting_mutex);
+
+  /* Move all remaining buffers back to active buffers. */
+  smal_thread_mutex_lock(&buffer_head_mutex);
+  smal_thread_mutex_lock(&buffer_collecting_mutex);
+  smal_dllist_append(&buffer_head, &buffer_collecting);
+  // smal_buffer_print_all(0, "buffer_head <- buffer_collecting");
+  smal_thread_mutex_unlock(&buffer_collecting_mutex);
   smal_thread_mutex_unlock(&buffer_head_mutex);
 
   -- in_collect;
@@ -954,34 +1010,6 @@ void _smal_collect_inner()
 
   smal_thread_mutex_unlock(&_smal_collect_inner_mutex);
 }
-
-/**********************************************/
-
-void smal_each_sweepable_object(int (*func)(smal_type *type, void *ptr, void *arg), void *arg)
-{
-  smal_buffer *self;
-  assert(in_collect);
-
-  smal_thread_mutex_lock(&buffer_head_mutex);
-  smal_dllist_each(&buffer_head, self); {
-    void *ptr, *alloc_ptr = smal_buffer_alloc_ptr(self);
-    smal_thread_mutex_lock(&self->mark_bits_mutex);
-    smal_thread_mutex_lock(&self->free_bits_mutex);
-    smal_thread_mutex_lock(&self->free_list_mutex);
-    for ( ptr = self->begin_ptr; ptr < alloc_ptr; ptr += smal_buffer_object_size(self) ) {
-      if ( ! smal_buffer_markQ(self, ptr) ) {
-	if ( ! smal_buffer_freeQ(self, ptr) ) {
-	  func(self->type, ptr, arg);
-	}
-      }
-    }
-    smal_thread_mutex_unlock(&self->free_list_mutex);
-    smal_thread_mutex_unlock(&self->free_bits_mutex);
-    smal_thread_mutex_unlock(&self->mark_bits_mutex);
-  } smal_dllist_each_end();
-  smal_thread_mutex_unlock(&buffer_head_mutex);
-}
-
 
 /**********************************************/
 
@@ -1024,6 +1052,7 @@ smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free
   smal_thread_mutex_init(&type->stats._mutex);
   
   smal_thread_mutex_lock(&type_head_mutex);
+  smal_dllist_init(type);
   smal_dllist_insert(&type_head, type);
   smal_thread_mutex_unlock(&type_head_mutex);
 
@@ -1165,22 +1194,30 @@ void smal_free(void *ptr)
 void smal_each_object(void (*func)(smal_type *type, void *ptr, void *arg), void *arg)
 {
   smal_buffer *buf;
+  // int stop = 0;
 
   if ( in_collect ) return;
   if ( ! initialized ) initialize();
 
   ++ no_collect;
 
+  smal_thread_mutex_lock(&buffer_head_mutex);
   smal_dllist_each(&buffer_head, buf); {
-    void *ptr;
-    for ( ptr = buf->begin_ptr; ptr < buf->alloc_ptr; ptr += smal_buffer_object_size(buf) ) {
-      if ( ! smal_bitmap_setQ(&buf->free_bits, smal_buffer_i(buf, ptr)) ) {
+    void *ptr, *alloc_ptr = smal_buffer_alloc_ptr(buf);
+    smal_thread_mutex_lock(&buf->free_bits_mutex);
+    for ( ptr = buf->begin_ptr; ptr < alloc_ptr; ptr += smal_buffer_object_size(buf) ) {
+      if ( ! smal_buffer_freeQ(buf, ptr) ) {
 	func(buf->type, ptr, arg);
+	// if ( result < 0 ) { stop = result; break }
       }
     }
+    smal_thread_mutex_unlock(&buf->free_bits_mutex);
+    // if ( stop ) break;
   } smal_dllist_each_end();
+  smal_thread_mutex_unlock(&buffer_head_mutex);
 
   -- no_collect;
+  // return stop;
 }
 
 void smal_global_stats(smal_stats *stats)
@@ -1209,6 +1246,7 @@ static void _initialize()
   smal_thread_mutex_init(&type_head_mutex);
   smal_thread_mutex_init(&buffer_head_mutex);
   smal_thread_mutex_init(&buffer_head.stats._mutex);
+  smal_thread_mutex_init(&buffer_collecting_mutex);
   smal_thread_mutex_init(&buffer_id_min_max_mutex);
   smal_thread_mutex_init(&buffer_table_mutex);
   smal_thread_mutex_init(&_smal_collect_inner_mutex);
@@ -1222,6 +1260,8 @@ static void _initialize()
 
   memset(&buffer_head, 0, sizeof(buffer_head));
   smal_dllist_init(&buffer_head);
+
+  smal_dllist_init(&buffer_collecting);
 
   memset(&type_head, 0, sizeof(type_head));
   smal_dllist_init(&type_head);

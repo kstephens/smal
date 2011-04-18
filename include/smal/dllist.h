@@ -6,8 +6,15 @@
 #ifndef _SMAL_DLLIST_H
 #define _SMAL_DLLIST_H
 
+typedef struct smal_dllist_head 
+{
+  struct smal_dllist_head *next, *prev;
+} smal_dllist_head;
+
 #define smal_dllist_init(X) (X)->next = (X)->prev = (void*) (X)
 
+// Assumes X is empty.
+// Assumes H is not empty.
 #define smal_dllist_insert(H,X)			\
   do {						\
     (X)->prev = (void*) (H);			\
@@ -33,4 +40,21 @@
     }						\
   } while(0)					\
 
+// Append B to A, empties B.
+// Assume neither A or B is empty.
+#define smal_dllist_append(A, B)			\
+  do {							\
+    smal_dllist_head *_b_next = (void*) ((B)->next);	\
+    if ( _b_next != (void*) (B) ) {			\
+      smal_dllist_head *_b_prev = (void*) ((B)->prev);	\
+      smal_dllist_head *_a_prev = (void*) ((A)->prev);	\
+      (A)->prev = (void*) _b_prev;			\
+      _a_prev->next = _b_next;				\
+      _b_next->prev = _a_prev;				\
+      _b_prev->next = (void*) (A);			\
+      smal_dllist_init(B);				\
+    }							\
+  } while(0)
+
 #endif
+
