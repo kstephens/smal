@@ -166,10 +166,21 @@ However, SMAL provides a simple, <code>smal_roots</code> package to explicitly d
 
 == Threads ==
 
-SMAL supports a tiny <code>smal_thread</code> abstraction around <code>pthreads</code>.
-The <code>smal_roots</code> package is thread-aware and thread-safe.  
-The rest of the SMAL allocator is not yet thread-safe.
-See include/smal/thread.h.
+SMAL supports a simple <code>smal_thread</code> abstraction around <code>pthreads</code>.
+The <code>smal_roots</code>, finalization and reference packages are thread-aware and thread-safe.  
+
+See include/smal/thread.h for more info.
+
+=== Thread Issues ===
+
+The rest of the SMAL allocator is not completely thread-safe, yet.
+SMAL does not yet have portable mechanism to:
+* discover all stop all threads, 
+* collect their stacks and registers.
+
+=== Thread Performance ===
+
+When enabled with threading support, each SMAL allocation requires approximately 10 mutex lock/unlock operations.
 
 == Object Enumeration ==
 
@@ -177,12 +188,12 @@ SMAL supports global object enumeration (i.e. Ruby ObjectSpace.each_object).
 
 == Weak References and Reference Queues ==
 
-SMAL contains an optional weak reference and reference queue implementation.
+SMAL contains an optional, thread-safe weak reference and reference queue implementation.
 See include/smal/reference.h.
 
 == Finalization ==
 
-SMAL contains an optional finalizer implementation.
+SMAL contains an optional, thread-safe finalizer implementation.
 See include/smal/finalizer.h.
 
 == Licensing ==
