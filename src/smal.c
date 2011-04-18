@@ -789,10 +789,12 @@ void *smal_buffer_alloc_object(smal_buffer *self)
 static
 void smal_buffer_free_object(smal_buffer *self, void *ptr)
 {
-  // smal_thread_mutex_lock(&self->free_list_mutex);
+  // assume free_bits and free_list mutexs are locked.
+  // smal_thread_mutex_lock(&self->free_bits_mutex);
   smal_bitmap_set_c(&self->free_bits, smal_buffer_i(self, ptr));
-  // smal_thread_mutex_unlock(&self->free_list_mutex);
+  // smal_thread_mutex_unlock(&self->free_bits_mutex);
 
+  // Should we unlock free_bits and free_list?
   self->type->free_func(ptr);
 
   // smal_thread_mutex_lock(&self->free_list_mutex);
@@ -834,6 +836,10 @@ void smal_buffer_sweep(smal_buffer *self)
   /* Assume every alloc after now is an explicit allocation. */
   void *alloc_ptr = smal_buffer_alloc_ptr(self);
   size_t live_n = 0;
+#if 0
+  void **free_ptrs = malloc(sizeof(free_ptrs[0]) * self->object_capacity);
+  void **free_ptrs_p = free_ptrs;
+#endif
 
   smal_thread_mutex_lock(&self->mark_bits_mutex);
   smal_thread_mutex_lock(&self->free_bits_mutex);
@@ -849,11 +855,14 @@ void smal_buffer_sweep(smal_buffer *self)
 	++ live_n;
       } else {
 	if ( ! smal_buffer_freeQ(self, ptr) ) {
+	  // *(free_ptrs_p ++) = ptr;
 	  smal_buffer_free_object(self, ptr);
 	}
       }
     }
   }
+
+  // free(free_ptrs);
 
   smal_thread_mutex_unlock(&self->free_list_mutex);
   smal_thread_mutex_unlock(&self->free_bits_mutex);
