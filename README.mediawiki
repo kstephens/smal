@@ -180,7 +180,9 @@ SMAL does not yet have portable mechanism to:
 
 === Thread Performance ===
 
-When enabled with threading support, each SMAL allocation requires approximately 10 mutex lock/unlock operations.
+When enabled with threading support, each SMAL allocation requires approximately 10 mutex lock/unlock operations.  
+SMAL attempts to use many smaller mutex regions, in hope of paralellizing as much as possible.  
+The global and type stats are probably the most frequently locked structures.
 
 == Object Enumeration ==
 
