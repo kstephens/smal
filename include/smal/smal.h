@@ -37,6 +37,7 @@ typedef struct smal_stats smal_stats;
 struct smal_stats {
   size_t alloc_id; /* may wrap. */
   size_t free_id; /* may wrap. */
+  size_t capacity_n; /* number of object that can be allocated with current buffers. */
   size_t alloc_n; /* number of objects allocated. */
   size_t avail_n; /* number of objects either unallocated or on free_list. */
   size_t live_n; /* number of objects known to be live. */

@@ -145,6 +145,7 @@ void smal_bitmap_free(smal_bitmap *self)
 const char *smal_stats_names[] = {
   "alloc_id",
   "free_id",
+  "capacity_n",
   "alloc_n",
   "avail_n",
   "live_n",
@@ -500,37 +501,16 @@ void smal_buffer_free(smal_buffer *self)
   // Remove from type's alloc_buffer, if appropriate.
   smal_buffer_disassociate_from_type(self);
   
-  smal_thread_mutex_lock(&self->stats._mutex);
+  smal_LOCK_STATS(lock);
 
-  // Update type stats.
-  smal_thread_mutex_lock(&self->type->stats._mutex);
-  
-  assert(self->type->stats.buffer_n >= 1);
-  self->type->stats.buffer_n -= 1;
-  assert(self->type->stats.alloc_n >= self->stats.alloc_n);
-  self->type->stats.alloc_n -= self->stats.alloc_n;
-  assert(self->type->stats.avail_n >= self->stats.avail_n);
-  self->type->stats.avail_n -= self->stats.avail_n;
-  assert(self->type->stats.free_n >= self->stats.free_n);
-  self->type->stats.free_n  -= self->stats.free_n;
-  
-  smal_thread_mutex_unlock(&self->type->stats._mutex);
+  smal_UPDATE_STATS(capacity_n, -= self->stats.capacity_n);
+  smal_UPDATE_STATS(alloc_n,    -= self->stats.alloc_n);
+  smal_UPDATE_STATS(avail_n,    -= self->stats.avail_n);
+  // smal_UPDATE_STATS(live_n,     -= self->stats.live_n);
+  smal_UPDATE_STATS(free_n,     -= self->stats.free_n);
+  smal_UPDATE_STATS(buffer_n,   -= 1);
 
-  // Update global stats.
-  smal_thread_mutex_lock(&buffer_head.stats._mutex);
-
-  assert(buffer_head.stats.alloc_n >= self->stats.alloc_n);
-  buffer_head.stats.alloc_n -= self->stats.alloc_n;
-  assert(buffer_head.stats.avail_n >= self->stats.avail_n);
-  buffer_head.stats.avail_n -= self->stats.avail_n;
-  assert(buffer_head.stats.free_n  >= self->stats.free_n);
-  buffer_head.stats.free_n  -= self->stats.free_n;
-  assert(buffer_head.stats.buffer_n >= 1);
-  buffer_head.stats.buffer_n -= 1;
-
-  smal_thread_mutex_unlock(&buffer_head.stats._mutex);
-
-  smal_thread_mutex_unlock(&self->stats._mutex);
+  smal_LOCK_STATS(unlock);
 
   result = munmap(addr, size);
   smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) addr, (unsigned long) size, (int) result);
@@ -601,7 +581,8 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
 
   smal_LOCK_STATS(lock);
   assert(self->stats.avail_n == 0);
-  smal_UPDATE_STATS(avail_n, += self->object_capacity);
+  smal_UPDATE_STATS(capacity_n, += self->object_capacity);
+  smal_UPDATE_STATS(avail_n,    += self->object_capacity);
   smal_LOCK_STATS(unlock);
 
  done:
