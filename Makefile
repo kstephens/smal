@@ -9,7 +9,7 @@ CFLAGS_OPT = -O3 #
 CFLAGS_PROF = -pg -DSMAL_PROF #
 CFLAGS_PROF = #
 CFLAGS_THREAD = -DSMAL_PTHREAD=1 #
-# CFLAGS_THREAD = -DSMAL_THREAD_MUTEX_DEBUG=2 #
+# CFLAGS_THREAD += -DSMAL_THREAD_MUTEX_DEBUG=3 #
 CFLAGS = $(CFLAGS_OPT) $(CFLAGS_PROF) -g -Wall -Werror -DSMAL_DEBUG=1 $(CFLAGS_THREAD) -I$(INC_DIR) -Isrc #
 
 H_FILES := $(shell echo $(INC_DIR)/smal/*.h) #
@@ -31,7 +31,7 @@ $(SRC_LIB) : $(O_FILES)
 	ar -rs $@ $(O_FILES)
 
 t/%.t : t/%.c $(SRC_LIB) $(H_FILES)
-	$(CC) $(CFLAGS:$(CFLAGS_OPT)=) -DSMAL_UNIT_TEST=1 -DSMAL_DEBUG=1 -o $@ $(@:%.t=%.c) $(SRC_LIB) 
+	$(CC) $(CFLAGS:$(CFLAGS_OPT)=) -I./t -DSMAL_UNIT_TEST=1 -DSMAL_DEBUG=1 -o $@ $(@:%.t=%.c) $(SRC_LIB) 
 
 clean :
 	rm -rf *.s *.dSYM *.o *.a src/*.o src/*.a t/*.t t/*.dSYM

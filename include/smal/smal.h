@@ -41,6 +41,7 @@ struct smal_stats {
   size_t alloc_n; /* number of objects allocated. */
   size_t avail_n; /* number of objects either unallocated or on free_list. */
   size_t live_n; /* number of objects known to be live. */
+  size_t live_before_sweep_n; /* number of objects known to be live before sweep. */
   size_t free_n; /* number of objects on free_list. */
   size_t buffer_n; /* number of buffers active. */
   smal_thread_mutex _mutex;
@@ -85,6 +86,7 @@ struct smal_buffer {
   void *begin_ptr; /* start of object allocations. */
   void *end_ptr; /* alloc_ptr guard. */
   void *alloc_ptr; /* next location to allocate an object. */
+  int alloc_disabled;
   smal_thread_mutex alloc_ptr_mutex;
 
   smal_stats stats;
