@@ -46,10 +46,13 @@ test : all $(TESTS_T)
 	do \
 	  time $$t || gdb --args $$t ;\
 	done
- 
+
 valgrind : all $(TEST_T)
 	set -ex ;\
 	for t in $(TESTS_T) ;\
 	do \
 	  time valgrind $$t || gdb --args $$t ;\
 	done
+
+threaded-vs-single:
+	(CFLAGS_THREAD='-DSMAL_PTHREAD=1' make clean all && time t/stress_test_2.t; make clean all && time t/stress_test_2.t) 2>&1 | grep 'real'
