@@ -527,7 +527,7 @@ void smal_buffer_free(smal_buffer *self)
  * Mark bits
  */
 
-#define smal_buffer_markQ(BUF, PTR) \
+#define smal_buffer_markQ(BUF, PTR)				\
   smal_bitmap_setQ(&(BUF)->mark_bits, smal_buffer_i(BUF, PTR))
 
 #define smal_buffer_mark(BUF, PTR)				\
@@ -724,8 +724,7 @@ void *smal_buffer_alloc_object(smal_buffer *self)
     assert(buffer_head.stats.avail_n > 0);
     smal_UPDATE_STATS(avail_n, -= 1);
 
-    if ( in_collect ) /* should this really be optional? */
-      smal_buffer_mark(self, ptr);
+    smal_buffer_mark(self, ptr);
   } else {
     assert(self->stats.avail_n == 0);
   }
