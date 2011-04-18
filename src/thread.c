@@ -12,6 +12,12 @@
 #include <string.h> /* memset() */
 #include <stdio.h>
 
+#ifdef smal_thread_mutex_init
+#undef smal_thread_mutex_init
+#undef smal_thread_mutex_lock
+#undef smal_thread_mutex_unlock
+#endif
+
 static int thread_inited;
 static smal_thread thread_main;
 
@@ -225,35 +231,65 @@ int smal_thread_do_once(smal_thread_once *once, void (*init_routine)())
   return 0;
 }
 
-#ifdef  SMAL_THREAD_MUTEX_DEBUG
-#define SMAL_THREAD_MUTEX_DEBUG 0
+#if SMAL_THREAD_MUTEX_DEBUG
+static size_t mutex_n, mutex_lock_n, mutex_unlock_n;
+#endif
+
+#if SMAL_THREAD_MUTEX_DEBUG >= 1
+static
+void mutex_stats()
+{
+  fprintf(stderr,
+	  "\nsmal mutex stats:\n  %16lu mutex_n \n  %16lu mutex_lock_n\n  %16lu mutex_unlock_n\n\n", 
+	  (unsigned long) mutex_n,
+	  (unsigned long) mutex_lock_n,
+	  (unsigned long) mutex_unlock_n
+	  );
+}
 #endif
 
 int smal_thread_mutex_init(smal_thread_mutex *mutex)
 {
+#if SMAL_THREAD_MUTEX_DEBUG >= 2
+  static int once;
+  if ( ! once ) {
+    once = 1;
+    atexit(mutex_stats);
+  }
+#endif
+
+#if SMAL_THREAD_MUTEX_DEBUG
+  ++ mutex_n;
   *mutex = 0;
+#endif
   return 0;
 }
 
 int smal_thread_mutex_lock(smal_thread_mutex *mutex)
 {
 #if SMAL_THREAD_MUTEX_DEBUG
+  ++ mutex_lock_n;
+#if SMAL_THREAD_MUTEX_DEBUG >= 3
   fprintf(stderr, "  s_t_m_l(%p) {\n", mutex);
 #endif
   if ( *mutex )
     abort();
   ++ *mutex;
+#endif
   return 0;
 }
 
 int smal_thread_mutex_unlock(smal_thread_mutex *mutex)
 {
 #if SMAL_THREAD_MUTEX_DEBUG
+  ++ mutex_unlock_n;
+#if SMAL_THREAD_MUTEX_DEBUG >= 3
   fprintf(stderr, "  s_t_m_u(%p) }\n", mutex);
 #endif
   if ( ! *mutex )
     abort();
   -- *mutex;
+#endif
   return 0;
 }
 
