@@ -14,20 +14,22 @@
 
 #ifdef smal_thread_mutex_init
 #undef smal_thread_mutex_init
+#undef smal_thread_mutex_destroy
 #undef smal_thread_mutex_lock
 #undef smal_thread_mutex_unlock
 #endif
 
 #if SMAL_THREAD_MUTEX_DEBUG
-static size_t mutex_n, mutex_lock_n, mutex_unlock_n;
+static size_t mutex_n, mutex_destroy_n, mutex_lock_n, mutex_unlock_n;
 #endif
 #if SMAL_THREAD_MUTEX_DEBUG >= 1
 static
 void mutex_stats()
 {
   fprintf(stderr,
-	  "\nsmal mutex stats:\n  %16lu mutex_n \n  %16lu mutex_lock_n\n  %16lu mutex_unlock_n\n\n", 
+	  "\nsmal mutex stats:\n  %16lu mutex_n \n  %16lu mutex_destroy_n \n  %16lu mutex_lock_n \n  %16lu mutex_unlock_n \n\n", 
 	  (unsigned long) mutex_n,
+	  (unsigned long) mutex_destroy_n,
 	  (unsigned long) mutex_lock_n,
 	  (unsigned long) mutex_unlock_n
 	  );
@@ -271,6 +273,25 @@ int smal_thread_mutex_init(smal_thread_mutex *mutex)
 
 #if SMAL_PTHREAD
   return pthread_mutex_init(mutex, 0);
+#else
+  return 0;
+#endif
+}
+
+int smal_thread_mutex_destroy(smal_thread_mutex *mutex)
+{
+#if SMAL_THREAD_MUTEX_DEBUG
+  ++ mutex_destroy_n;
+#if SMAL_THREAD_MUTEX_DEBUG >= 3
+  fprintf(stderr, "\n  t@%p s_t_m_d(%p) = %lu\n", smal_thread_self(), mutex, (unsigned long) mutex_destroy_n);
+#endif
+#if ! SMAL_PTHREAD
+  *mutex = 0;
+#endif
+#endif
+
+#if SMAL_PTHREAD
+  return pthread_mutex_destroy(mutex);
 #else
   return 0;
 #endif
