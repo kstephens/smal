@@ -11,10 +11,10 @@ CFLAGS_PROF = -pg -DSMAL_PROF #
 else
 CFLAGS_PROF = #
 endif
-ifneq ($(ENABLE_ASSERT),)
-CFLAGS_ASSERT = #
-else
+ifeq ($(ENABLE_ASSERT),0)
 CFLAGS_ASSERT = -DNASSERT=1 #
+else
+CFLAGS_ASSERT = #
 endif
 ifneq ($(ENABLE_DEBUG),)
 CFLAGS_DEBUG = #

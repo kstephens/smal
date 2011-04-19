@@ -87,8 +87,6 @@ int smal_thread_mutex_unlock(smal_thread_mutex *m);
     _smal_W_M_result;				\
   })
 
-#if 0
-
 typedef struct smal_thread_lock {
   int lock;
   smal_thread_mutex mutex;
@@ -99,13 +97,14 @@ typedef struct smal_thread_lock {
     (LOCK)->lock = 0;				\
     smal_thread_mutex_init(&(LOCK)->mutex);	\
   } while ( 0 ) 
-    
-#define smal_thread_lockQ(LOCK)  smal_WITH_MUTEX((LOCK)->_mutex, int, (LOCK)->lock)
-#define smal_thread_lock(LOCK)   smal_WITH_MUTEX((LOCK)->_mutex, int, (LOCK)->lock ++)
-#define smal_thread_unlock(LOCK) smal_WITH_MUTEX((LOCK)->_mutex, int, -- (LOCK)->lock)
-#define smal_thread_lock_begin(LOCK) if ( ! smal_thread_lock(LOCK) ) {
-#define smal_thread_lock_end(LOCK) smal_thread_unlock(LOCK); }
 
-#endif
+#define smal_thread_lock_destroy(LOCK)		\
+  smal_thread_mutex_destroy(&(LOCK)->mutex)
+
+#define smal_thread_lock_test(LOCK)   smal_WITH_MUTEX(&(LOCK)->mutex, int, (LOCK)->lock)
+#define smal_thread_lock_lock(LOCK)   smal_WITH_MUTEX(&(LOCK)->mutex, int, (LOCK)->lock ++)
+#define smal_thread_lock_unlock(LOCK) smal_WITH_MUTEX(&(LOCK)->mutex, int, -- (LOCK)->lock)
+#define smal_thread_lock_begin(LOCK)  do { if ( ! smal_thread_lock_lock(LOCK) ) {
+#define smal_thread_lock_end(LOCK)    smal_thread_unlock(LOCK); } } while ( 0 )
 
 #endif

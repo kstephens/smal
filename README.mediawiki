@@ -182,9 +182,8 @@ SMAL does not yet have portable mechanism to:
 
 When enabled with threading support, 
 SMAL attempts to use many smaller mutex regions to avoid long locks or global locks.  
-The global and type stats are probably the most frequently locked structures.
 There is a single allocation lock that is held to allow disabling of allocation of each buffer before collection().
-The multi-thread version is approx. 2 times slower single-thread version, when running only one thread.
+The multi-thread version is approx. 2 to 3 times slower single-thread version, when running only one thread.
 
 == Object Enumeration ==
 

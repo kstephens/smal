@@ -96,8 +96,7 @@ struct smal_buffer {
   void *end_ptr; /* alloc_ptr guard. */
   void *alloc_ptr; /* next location to allocate an object. */
   smal_thread_mutex alloc_ptr_mutex;
-  int alloc_disabled;
-  smal_thread_mutex alloc_disabled_mutex;
+  smal_thread_lock alloc_disabled;
 
   smal_stats stats;
 
