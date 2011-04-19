@@ -63,7 +63,7 @@ void run_test()
       // my_print_stats();
     }
     
-    if ( rand() % 100 == 50 ) {
+    if ( rand() % 100 == 0 ) {
       int obj_count = 0;
       smal_each_object(my_count_object, &obj_count);
       ++ smal_each_object_n;
@@ -71,10 +71,17 @@ void run_test()
       // fprintf(stderr, "  object_count = %d\n", obj_count);
     }
   }
-
-  my_print_stats();
   
-  x = y = 0;
+  fprintf(stderr, "\nDONE\n");
+  my_print_stats();
+  {
+    smal_stats stats = { 0 };
+    smal_global_stats(&stats);
+    assert(stats.alloc_id == smal_alloc_n);
+    assert(stats.free_id < stats.alloc_id);
+  }
+
+  x = y = 0;  
 }
 
 int main(int argc, char **argv)
@@ -84,14 +91,13 @@ int main(int argc, char **argv)
   run_test();
 
   smal_collect();
-
-  {
-    char cmd[1024];
-    sprintf(cmd, "/bin/ps -l -p %d", getpid());
-    system(cmd);
-  }
-  
   my_print_stats();
+  {
+    smal_stats stats = { 0 };
+    smal_global_stats(&stats);
+    assert(stats.alloc_id == smal_alloc_n);
+    assert(stats.free_id == stats.alloc_id);
+  }
   
   smal_shutdown();
   
