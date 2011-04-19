@@ -78,3 +78,7 @@ single:
 threaded-vs-single:
 	(make threaded && time t/stress_test_2.t; make single && time t/stress_test_2.t) 2>&1 | grep 'real'
 
+
+both:
+	(make threaded && $(cmd) && make single && $(cmd))
+
