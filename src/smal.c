@@ -315,6 +315,8 @@ void smal_buffer_table_add(smal_buffer *self)
   fprintf(stderr, "  %lu buffer_id %lu @ %p [%lu, %lu] %lu\n", (unsigned long) buffer_head.stats.buffer_n, (unsigned long) self->buffer_id, self, (unsigned long) buffer_id_min, (unsigned long) buffer_id_max, (unsigned long) buffer_table_size_new);
 #endif
 
+  smal_thread_mutex_lock(&buffer_table_mutex);
+
   if ( buffer_table ) {
     for ( i = 0; i < buffer_table_size; ++ i ) {
       smal_buffer *x = buffer_table[i];
@@ -335,10 +337,13 @@ void smal_buffer_table_add(smal_buffer *self)
   assert(! buffer_table[i]);
   buffer_table[i] = self;
 
-  // Assume buffer_head is locked.
+  smal_thread_mutex_unlock(&buffer_table_mutex);
+
+  smal_thread_mutex_lock(&buffer_head_mutex);
   smal_dllist_init(self);
   smal_dllist_insert(&buffer_head, self);
   // smal_buffer_print_all(self, "add");
+  smal_thread_mutex_unlock(&buffer_head_mutex);
   
   smal_debug(3, "buffer_table_size = %d", (int) buffer_table_size);
 }
@@ -360,15 +365,16 @@ void smal_buffer_table_remove(smal_buffer *self)
 
   // smal_thread_mutex_unlock(&buffer_head_mutex);
 
-  /* Adjust buffer_table window. */
-  smal_thread_mutex_lock(&buffer_id_min_max_mutex);
-  /* Check for lock during sweep. */
+  /* Check for lock during collect. */
   if ( ! smal_thread_lock_test(&buffer_id_min_max_keep) ) {  
+    /* Adjust buffer_table window. */
+    smal_thread_mutex_lock(&buffer_id_min_max_mutex);
+    /* Was buffer at beginning or end of buffer id space? */
     if ( buffer_id_min == self->buffer_id || buffer_id_max == self->buffer_id ) {
       buffer_id_min = buffer_id_max = 0;
     }
+    smal_thread_mutex_unlock(&buffer_id_min_max_mutex);
   }
-  smal_thread_mutex_unlock(&buffer_id_min_max_mutex);
 }
 
 
@@ -1093,7 +1099,7 @@ smal_buffer *smal_type_find_alloc_buffer(smal_type *self)
     // fprintf(stderr, "  type %p buf %p TRY\n", self, buf);
     assert(buf && buf->type == self);
     smal_thread_mutex_lock(&buf->stats._mutex);
-    if ( ! smal_thread_lock_test(&buf->alloc_disabled) && buf->stats.avail_n ) {
+    if ( buf->stats.avail_n && ! smal_thread_lock_test(&buf->alloc_disabled) ) {
       // fprintf(stderr, "  type %p buf %p avail_n %lu\n", self, buf, buf->stats.avail_n);
       if ( ! least_avail_buf )
 	least_avail_buf = buf;
