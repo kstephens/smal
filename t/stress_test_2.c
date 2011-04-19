@@ -6,10 +6,11 @@
 #include "roots_conservative.h"
 
 static
-void my_count_object(smal_type *type, void *ptr, void *arg)
+int my_count_object(smal_type *type, void *ptr, void *arg)
 {
   //  fprintf(stderr, "  type %p obj %p\n", type, ptr);
   (* (int *) arg) ++; 
+  return 0;
 }
 
 static
@@ -67,6 +68,11 @@ void run_test()
       int obj_count = 0;
       smal_each_object(my_count_object, &obj_count);
       ++ smal_each_object_n;
+      {
+	smal_stats stats = { 0 };
+	smal_global_stats(&stats);
+	assert(obj_count == stats.live_n);
+      }
       // my_print_stats();
       // fprintf(stderr, "  object_count = %d\n", obj_count);
     }

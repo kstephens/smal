@@ -6,10 +6,11 @@
 #include "roots_explicit.h"
 
 static
-void my_count_object(smal_type *type, void *ptr, void *arg)
+int my_count_object(smal_type *type, void *ptr, void *arg)
 {
   //  fprintf(stderr, "  type %p obj %p\n", type, ptr);
   (* (int *) arg) ++; 
+  return 0;
 }
 
 int main(int argc, char **argv)

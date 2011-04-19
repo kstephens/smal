@@ -7,10 +7,11 @@
 #include "roots_explicit.h"
 
 static
-void count_object(smal_type *type, void *ptr, void *arg)
+int count_object(smal_type *type, void *ptr, void *arg)
 {
   fprintf(stderr, "  type %p obj %p\n", type, ptr);
-  (* (int *) arg) ++; 
+  (* (int *) arg) ++;
+  return 0;
 }
 
 int main()
@@ -36,6 +37,11 @@ int main()
   {
     int obj_count = 0;
     smal_each_object(count_object, &obj_count);
+    {
+      smal_stats stats = { 0 };
+      smal_global_stats(&stats);
+      assert(stats.live_n == 1);
+    }
     assert(obj_count == 1);
   }
 

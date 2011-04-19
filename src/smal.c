@@ -1223,10 +1223,10 @@ void smal_free(void *ptr)
 
 /********************************************************************/
 
-void smal_each_object(void (*func)(smal_type *type, void *ptr, void *arg), void *arg)
+int smal_each_object(int (*func)(smal_type *type, void *ptr, void *arg), void *arg)
 {
   smal_buffer *buf;
-  // int stop = 0;
+  int stop = 0;
 
   if ( in_collect ) abort();
   if ( ! initialized ) initialize();
@@ -1243,16 +1243,19 @@ void smal_each_object(void (*func)(smal_type *type, void *ptr, void *arg), void 
     smal_thread_rwlock_rdlock(&buf->free_bits_lock);
     for ( ptr = buf->begin_ptr; ptr < alloc_ptr; ptr += smal_buffer_object_size(buf) ) {
       if ( ! smal_buffer_freeQ(buf, ptr) ) {
+	int result;
 	smal_thread_rwlock_unlock(&buf->free_bits_lock);
-	func(buf->type, ptr, arg);
+	result = func(buf->type, ptr, arg);
 	smal_thread_rwlock_rdlock(&buf->free_bits_lock);
-	// if ( result < 0 ) { stop = result; break }
+	if ( result < 0 ) { stop = result; break; }
       }
     }
     smal_thread_rwlock_unlock(&buf->free_bits_lock);
-    // if ( stop ) break;
+    if ( stop ) break;
   } smal_dllist_each_end();
   smal_thread_rwlock_unlock(&buffer_head_lock);
+
+  if ( stop ) return stop;
 
   smal_thread_rwlock_rdlock(&buffer_collecting_lock);
   smal_dllist_each(&buffer_collecting, buf); {
@@ -1261,21 +1264,22 @@ void smal_each_object(void (*func)(smal_type *type, void *ptr, void *arg), void 
     smal_thread_rwlock_rdlock(&buf->free_bits_lock);
     for ( ptr = buf->begin_ptr; ptr < alloc_ptr; ptr += smal_buffer_object_size(buf) ) {
       if ( ! smal_buffer_freeQ(buf, ptr) ) {
+	int result;
 	smal_thread_rwlock_unlock(&buf->free_bits_lock);
-	func(buf->type, ptr, arg);
+	result = func(buf->type, ptr, arg);
 	smal_thread_rwlock_rdlock(&buf->free_bits_lock);
-	// if ( result < 0 ) { stop = result; break }
+	if ( result < 0 ) { stop = result; break; }
       }
     }
     smal_thread_rwlock_unlock(&buf->free_bits_lock);
-    // if ( stop ) break;
+    if ( stop ) break;
   } smal_dllist_each_end();
   smal_thread_rwlock_unlock(&buffer_collecting_lock);
 
   smal_thread_rwlock_unlock(&alloc_lock);
 
   // -- no_collect;
-  // return stop;
+  return stop;
 }
 
 void smal_global_stats(smal_stats *stats)

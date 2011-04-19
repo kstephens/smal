@@ -123,8 +123,9 @@ void smal_mark_ptr_exact(void *ptr); /* assumes ptr is 0 or known to be properly
 void smal_mark_ptr_range(void *ptr, void *ptr_end);
 
 void smal_collect(); /* user can call this method. */
-/* Disables GC while executing. */
-void smal_each_object(void (*func)(smal_type *type, void *ptr, void *arg), void *arg);
+
+/* If func() returns < 0; stop iterating. */
+int smal_each_object(int (*func)(smal_type *type, void *ptr, void *arg), void *arg);
 
 /* Completely shuts down smal.  Frees all allocated memory. */
 void smal_shutdown();
