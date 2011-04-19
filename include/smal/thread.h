@@ -105,6 +105,6 @@ typedef struct smal_thread_lock {
 #define smal_thread_lock_lock(LOCK)   smal_WITH_MUTEX(&(LOCK)->mutex, int, (LOCK)->lock ++)
 #define smal_thread_lock_unlock(LOCK) smal_WITH_MUTEX(&(LOCK)->mutex, int, -- (LOCK)->lock)
 #define smal_thread_lock_begin(LOCK)  do { if ( ! smal_thread_lock_lock(LOCK) ) {
-#define smal_thread_lock_end(LOCK)    smal_thread_unlock(LOCK); } } while ( 0 )
+#define smal_thread_lock_end(LOCK)    smal_thread_lock_unlock(LOCK); } } while ( 0 )
 
 #endif

@@ -200,6 +200,8 @@ static smal_buffer **buffer_table = buffer_table_init;
 static size_t buffer_table_size = 1;
 static smal_thread_mutex buffer_table_mutex;
 
+static smal_thread_lock _smal_collect_inner_lock;
+
 #define _smal_buffer_buffer_id(PTR) (((size_t) (PTR)) / smal_buffer_size)
 #define _smal_buffer_offset(PTR) (((size_t) (PTR)) & smal_buffer_mask)
 #define _smal_buffer_addr(PTR) ((void*)(((size_t) (PTR)) & ~smal_buffer_mask))
@@ -920,7 +922,6 @@ void smal_buffer_sweep(smal_buffer *self)
   }
 }
 
-static smal_thread_mutex _smal_collect_inner_mutex;
 void _smal_collect_inner()
 {
   smal_buffer *buf;
@@ -929,7 +930,7 @@ void _smal_collect_inner()
 
   if ( no_collect || in_collect ) return;
 
-  smal_thread_mutex_lock(&_smal_collect_inner_mutex);
+  smal_thread_lock_begin(&_smal_collect_inner_lock); {
  
   smal_collect_before_mark();
 
@@ -1001,7 +1002,7 @@ void _smal_collect_inner()
 	     buffer_head.stats.free_n
 	    );
 
-  smal_thread_mutex_unlock(&_smal_collect_inner_mutex);
+  } smal_thread_lock_end(&_smal_collect_inner_lock);
 }
 
 /**********************************************/
@@ -1250,9 +1251,9 @@ static void _initialize()
   smal_thread_mutex_init(&buffer_collecting_mutex);
   smal_thread_mutex_init(&buffer_id_min_max_mutex);
   smal_thread_mutex_init(&buffer_table_mutex);
-  smal_thread_mutex_init(&_smal_collect_inner_mutex);
 
   smal_thread_lock_init(&buffer_id_min_max_keep);
+  smal_thread_lock_init(&_smal_collect_inner_lock);
 
   if ( (s = getenv("SMAL_DEBUG_LEVEL")) ) {
     smal_debug_level = atoi(s);
