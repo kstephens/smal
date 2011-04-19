@@ -4,7 +4,7 @@
 */
 
 #include "my_cons.h"
-#include "smal/explicit_roots.h"
+#include "smal/roots.h"
 #include "smal/finalizer.h"
 #include <stdio.h>
 #include <assert.h>

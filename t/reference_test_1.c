@@ -5,7 +5,7 @@
 
 #include "my_cons.h"
 #include "smal/smal.h"
-#include "smal/explicit_roots.h"
+#include "smal/roots.h"
 #include "smal/reference.h"
 #include <stdio.h>
 #include <assert.h>

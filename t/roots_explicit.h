@@ -2,7 +2,7 @@
   SMAL
   Copyright (c) 2011 Kurt A. Stephens
 */
-#include "smal/explicit_roots.h"
+#include "smal/roots.h"
 
 void smal_collect_before_inner(void *top_of_stack)
 {

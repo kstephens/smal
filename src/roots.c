@@ -5,7 +5,7 @@
 
 #include "smal/smal.h"
 #include "smal/thread.h"
-#include "smal/explicit_roots.h"
+#include "smal/roots.h"
 
 #include <assert.h>
 #include <stdlib.h> /* malloc(), free() */
