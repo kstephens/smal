@@ -8,6 +8,7 @@
 #if SMAL_PTHREAD
 
 #include "my_cons.h"
+#include "roots_explicit.h"
 
 static size_t alloc_n = 4000;
 
@@ -41,7 +42,6 @@ int main(int argc, char **argv)
   pthread_t child_thread_1;
   pthread_t child_thread_2;
 
-  bottom_of_stack = 0;
   my_cons_type = smal_type_for(sizeof(my_cons), my_cons_mark, 0);
 
   smal_thread_init();
