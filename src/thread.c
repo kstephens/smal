@@ -207,7 +207,7 @@ void smal_thread_each(void (*func)(smal_thread *t, void *arg), void *arg)
 
 int smal_thread_do_once(smal_thread_once *once, void (*init_routine)())
 {
-  return pthread_once(once, init_routine);
+  return smal_ASSERT(pthread_once(once, init_routine), == 0);
 }
 
 #else /* ! SMAL_THREAD */

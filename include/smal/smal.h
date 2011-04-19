@@ -7,6 +7,7 @@
 #define SMAL_SMAL_H
 
 #include <stddef.h>
+#include "smal/assert.h"
 #include "smal/thread.h"
 
 #define smal_alignedQ(ptr,align) (((size_t)(ptr) % (align)) == 0)
@@ -53,6 +54,7 @@ struct smal_stats {
   size_t free_n; /* number of objects on free_list. */
   size_t buffer_n; /* number of buffers active. */
   size_t mmap_size; /* bytes mmap()ed. */
+  size_t mmap_total; /* total bytes mmap()ed, may wrap. */
   smal_thread_mutex _mutex;
 };
 extern const char *smal_stats_names[];
@@ -60,7 +62,7 @@ extern const char *smal_stats_names[];
 struct smal_type {
   smal_type *next, *prev; /* global list of all smal_types. */
   smal_buffer_list buffers;
-  smal_thread_mutex buffers_mutex;
+  smal_thread_rwlock buffers_lock;
   size_t type_id;
   size_t object_size;
   smal_mark_func mark_func;
@@ -101,10 +103,10 @@ struct smal_buffer {
   smal_stats stats;
 
   smal_bitmap mark_bits;
-  smal_thread_mutex mark_bits_mutex;
+  smal_thread_rwlock mark_bits_lock;
 
   smal_bitmap free_bits;
-  smal_thread_mutex free_bits_mutex;
+  smal_thread_rwlock free_bits_lock;
 
   void *free_list;
   smal_thread_mutex free_list_mutex;
@@ -141,6 +143,8 @@ void smal_collect_mark_roots();
 
 /* Low-level/extension functions */
 int smal_object_reachableQ(void *ptr);
+
+void smal_buffer_print_all(smal_buffer *self, const char *action);
 
 #endif
 
