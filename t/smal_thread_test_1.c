@@ -33,7 +33,7 @@ static void* thread_func(void *arg)
   return arg;
 }
 
-int main()
+int main(int argc, char **argv)
 {
   void *thread_result = 0;
 #if SMAL_PTHREAD

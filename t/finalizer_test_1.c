@@ -37,7 +37,7 @@ void my_cons_finalizer(smal_finalizer *finalizer)
   finalizer_calls ++;
 }
 
-int main()
+int main(int argc, char **argv)
 {
   my_cons *x = 0, *y = 0;
   smal_finalizer *fin = 0;

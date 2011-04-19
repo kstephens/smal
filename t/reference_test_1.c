@@ -23,7 +23,7 @@ void smal_collect_mark_roots()
   smal_roots_mark_chain();
 }
 
-int main()
+int main(int argc, char **argv)
 {
   my_cons *x = 0, *y = 0;
   smal_reference *ref = 0, *ref_keep = 0;

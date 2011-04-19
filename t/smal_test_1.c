@@ -14,7 +14,7 @@ int count_object(smal_type *type, void *ptr, void *arg)
   return 0;
 }
 
-int main()
+int main(int argc, char **argv)
 {
   my_cons *x, *y;
   smal_roots_2(x, y);
