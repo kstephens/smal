@@ -32,22 +32,22 @@ static void initialize();
 #define smal_buffer_object_alignment(buf) smal_buffer_object_size(buf)
 #endif
 
-#ifndef smal_buffer_size_default
-#define smal_buffer_size_default ((size_t) (4 * 4 * 1024))
+#ifndef smal_page_size_default
+#define smal_page_size_default ((size_t) (4 * 4 * 1024))
 #endif
 
-#define smal_buffer_size smal_buffer_size_default
-#define smal_buffer_mask (smal_buffer_size - 1)
+#define smal_page_size smal_page_size_default
+#define smal_page_mask (smal_page_size - 1)
 
-#ifdef smal_buffer_size
-size_t _smal_buffer_size = smal_buffer_size;
+#ifdef smal_page_size
+size_t _smal_page_size = smal_page_size;
 #else
-size_t smal_buffer_size = smal_buffer_size_default;
+size_t smal_page_size = smal_page_size_default;
 #endif
-#ifdef smal_buffer_mask
-size_t _smal_buffer_mask = smal_buffer_mask;
+#ifdef smal_page_mask
+size_t _smal_page_mask = smal_page_mask;
 #else
-size_t smal_buffer_mask = smal_buffer_size_default - 1;
+size_t smal_page_mask = smal_page_size_default - 1;
 #endif
 
 
@@ -57,6 +57,93 @@ size_t smal_buffer_mask = smal_buffer_size_default - 1;
 
 #ifndef smal_buffer_object_alignment
 #define smal_buffer_object_alignment(buf) (buf)->object_alignment
+#endif
+
+/*********************************************************************
+ * addr -> page mapping.
+ */
+
+#define smal_addr_page_id(PTR) (((size_t) (PTR)) / smal_page_size)
+#define smal_addr_page_offset(PTR) (((size_t) (PTR)) & smal_page_mask)
+#define smal_addr_page(PTR) ((void*)(((size_t) (PTR)) & ~smal_page_mask))
+
+#ifndef SMAL_SEGREGATE_BUFFER_FROM_PAGE
+#define SMAL_SEGREGATE_BUFFER_FROM_PAGE 0
+#endif
+
+#if SMAL_SEGREGATE_BUFFER_FROM_PAGE
+
+/* Pointer to small_buffer is stored in first word of mmap region. */
+#define smal_addr_to_buffer(PTR)		\
+  (*((smal_buffer**)(smal_addr_page(PTR))))
+
+#define smal_buffer_to_page(BUF)		\
+  ((void*) (BUF)->mmap_addr)
+
+#define smal_buffer_page_id(BUF) ((BUF)->page_id) 
+
+#else
+
+/* smal_buffer is stored at head of mmap region. */
+#define smal_addr_to_buffer(PTR)		\
+  (((smal_buffer*)(smal_addr_page(PTR))))
+
+#define smal_buffer_to_page(BUF)		\
+  ((void*) (BUF))
+
+#define smal_buffer_page_id(BUF) smal_addr_page_id(BUF)
+
+#endif
+
+/*********************************************************************
+ * Debugging support.
+ */
+
+const char *smal_stats_names[] = {
+  "alloc_id",
+  "free_id",
+  "buffer_id",
+  "capacity_n",
+  "alloc_n",
+  "avail_n",
+  "live_n",
+  "live_before_sweep_n",
+  "free_n",
+  "buffer_n",
+  "mmap_size",
+  "mmap_total",
+  0
+};
+
+#ifndef SMAL_DEBUG
+#define SMAL_DEBUG 0
+#endif
+
+int smal_debug_level = 0;
+static smal_thread_mutex _smal_debug_mutex;
+
+#if SMAL_DEBUG
+static
+void _smal_debug(const char *func, const char *format, ...)
+{
+  va_list vap;
+  smal_thread_mutex_lock(&_smal_debug_mutex);
+  fprintf(stderr, "\rsmal: t@%p %s ", smal_thread_self(), func);
+  va_start(vap, format);
+  vfprintf(stderr, format, vap);
+  va_end(vap);
+  fprintf(stderr, "\n");
+  fflush(stderr);
+  smal_thread_mutex_unlock(&_smal_debug_mutex);
+}
+
+#define smal_debug(level, msg, args...)		\
+  do {						\
+    if ( smal_debug_level >= level ) 		\
+      _smal_debug(__FUNCTION__, msg, ##args);	\
+  } while(0)
+#else
+#define smal_debug(level, msg, args...) ((void) 0)
 #endif
 
 /*********************************************************************
@@ -126,56 +213,6 @@ void smal_bitmap_free(smal_bitmap *self)
   } while ( 0 )
 
 /*********************************************************************
- * Debugging support.
- */
-
-const char *smal_stats_names[] = {
-  "alloc_id",
-  "free_id",
-  "capacity_n",
-  "alloc_n",
-  "avail_n",
-  "live_n",
-  "live_before_sweep_n",
-  "free_n",
-  "buffer_n",
-  "mmap_size",
-  "mmap_total",
-  0
-};
-
-#ifndef SMAL_DEBUG
-#define SMAL_DEBUG 0
-#endif
-
-int smal_debug_level = 0;
-static smal_thread_mutex _smal_debug_mutex;
-
-#if SMAL_DEBUG
-static
-void _smal_debug(const char *func, const char *format, ...)
-{
-  va_list vap;
-  smal_thread_mutex_lock(&_smal_debug_mutex);
-  fprintf(stderr, "\rsmal: t@%p %s: ", smal_thread_self(), func);
-  va_start(vap, format);
-  vfprintf(stderr, format, vap);
-  va_end(vap);
-  fprintf(stderr, "\n");
-  fflush(stderr);
-  smal_thread_mutex_unlock(&_smal_debug_mutex);
-}
-
-#define smal_debug(level, msg, args...)		\
-  do {						\
-    if ( smal_debug_level >= level ) 		\
-      _smal_debug(__FUNCTION__, msg, ##args);	\
-  } while(0)
-#else
-#define smal_debug(level, msg, args...) (void)0
-#endif
-
-/*********************************************************************
  * Global data.
  */
 
@@ -192,9 +229,9 @@ static smal_thread_rwlock buffer_head_lock;
 static smal_buffer_list_head buffer_collecting;
 static smal_thread_rwlock buffer_collecting_lock;
 
-static size_t buffer_id_min, buffer_id_max;
-static smal_thread_mutex buffer_id_min_max_mutex;
-static smal_thread_lock buffer_id_min_max_keep;
+static size_t page_id_min, page_id_max;
+static smal_thread_mutex page_id_min_max_mutex;
+static smal_thread_lock page_id_min_max_keep;
 
 static smal_buffer *buffer_table_init[] = { 0 };
 static smal_buffer **buffer_table = buffer_table_init;
@@ -203,26 +240,7 @@ static smal_thread_rwlock buffer_table_lock;
 
 static smal_thread_lock _smal_collect_inner_lock;
 
-#define _smal_buffer_buffer_id(PTR) (((size_t) (PTR)) / smal_buffer_size)
-#define _smal_buffer_offset(PTR) (((size_t) (PTR)) & smal_buffer_mask)
-#define _smal_buffer_page(PTR) ((void*)(((size_t) (PTR)) & ~smal_buffer_mask))
-
-size_t smal_buffer_buffer_id(void *ptr) {
-  return _smal_buffer_buffer_id(ptr);
-}
-#define smal_buffer_buffer_id(PTR) _smal_buffer_buffer_id(PTR)
-
-size_t smal_buffer_offset(void *ptr) {
-  return _smal_buffer_offset(ptr);
-}
-#define smal_buffer_offset(PTR) _smal_buffer_offset(PTR)
-
-smal_buffer *smal_buffer_page(void *ptr) {
-  return _smal_buffer_page(ptr);
-}
-#define smal_buffer_page(PTR) _smal_buffer_page(PTR)
-
-static int in_collect;
+static int in_collect; /* protected by alloc_lock */
 static int in_mark;
 static int in_sweep;
 static int no_collect;
@@ -234,34 +252,14 @@ void null_func(void *ptr)
 }
 
 /************************************************************************
- ** Maps buffer pages to actual smal_buffer addresses.
+ ** Map any address to smal_buffer*.
  */
 
 #define smal_ptr_to_buffer(PTR)						\
-  smal_WITH_RDLOCK(&buffer_table_lock, smal_buffer*, buffer_table[smal_buffer_buffer_id(PTR) % buffer_table_size])
-
-#if 0
-
-/* Pointer to small_buffer is stored in first word of mmap region. */
-#define smal_addr_to_buffer(PTR)		\
-  (*((smal_buffer**)(smal_buffer_page(PTR))))
-
-#define smal_buffer_to_addr(BUF)		\
-  ((void*) (BUF)->mmap_addr)
-
-#else
-
-/* smal_buffer is stored at head of mmap region. */
-#define smal_addr_to_buffer(PTR)		\
-  (((smal_buffer*)(smal_buffer_page(PAGE))))
-
-#define smal_buffer_to_addr(BUF)		\
-  ((void*) (BUF))
-
-#endif
+  smal_WITH_RDLOCK(&buffer_table_lock, smal_buffer*, buffer_table[smal_addr_page_id(PTR) % buffer_table_size])
 
 #define smal_buffer_i(BUF, PTR) \
-  (((void*)(PTR) - (void*)(BUF)) / smal_buffer_object_size(BUF))
+  (((void*)(PTR) - smal_buffer_to_page(BUF)) / smal_buffer_object_size(BUF))
 
 #define smal_buffer_alloc_ptr(BUF)				       \
   smal_WITH_MUTEX(&(BUF)->alloc_ptr_mutex, void*, (BUF)->alloc_ptr)	       \
@@ -302,38 +300,40 @@ void smal_buffer_table_add(smal_buffer *self)
   
   // fprintf(stderr, "smal_buffer_table_add(%p)\n", self);
 
-  /* Recompute buffer_id_min, buffer_id_max */
-  smal_thread_mutex_lock(&buffer_id_min_max_mutex);
+  /* Recompute page_id_min, page_id_max */
+  smal_thread_mutex_lock(&page_id_min_max_mutex);
 
-  /* buffer_id_min and buffer_id_max is stale. */
-  if ( buffer_id_min == 0 && buffer_id_max == 0 ) {
+  /* page_id_min and page_id_max is stale. */
+  if ( page_id_min == 0 && page_id_max == 0 ) {
     smal_buffer *buf;
-    buffer_id_min = buffer_id_max = _smal_buffer_buffer_id(self);
+    page_id_min = page_id_max = smal_buffer_page_id(self);
+    assert(page_id_min != 0);
+    assert(page_id_max != 0);
     smal_thread_rwlock_rdlock(&buffer_head_lock);
     smal_dllist_each(&buffer_head, buf); {
-      if ( buffer_id_min > buf->buffer_id )
-	buffer_id_min = buf->buffer_id;
-      if ( buffer_id_max < buf->buffer_id )
-	buffer_id_max = buf->buffer_id;
+      if ( page_id_min > smal_buffer_page_id(buf) )
+	page_id_min = smal_buffer_page_id(buf);
+      else if ( page_id_max < smal_buffer_page_id(buf) )
+	page_id_max = smal_buffer_page_id(buf);
     } smal_dllist_each_end();
     smal_thread_rwlock_unlock(&buffer_head_lock);
   } else {
-    if ( buffer_id_min > self->buffer_id )
-      buffer_id_min = self->buffer_id;
-    if ( buffer_id_max < self->buffer_id )
-      buffer_id_max = self->buffer_id;
+    if ( page_id_min > smal_buffer_page_id(self) )
+      page_id_min = smal_buffer_page_id(self);
+    else if ( page_id_max < smal_buffer_page_id(self) )
+      page_id_max = smal_buffer_page_id(self);
   }
 
-  buffer_table_size_new = (buffer_id_max - buffer_id_min) + 1;
+  buffer_table_size_new = (page_id_max - page_id_min) + 1;
 
-  smal_thread_mutex_unlock(&buffer_id_min_max_mutex);
+  smal_thread_mutex_unlock(&page_id_min_max_mutex);
 
   buffer_table_new = malloc(sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1));
   memset(buffer_table_new, 0, sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1));
 
 #if 0
   fprintf(stderr, "smal_buffer_table_add(%p): malloc([%lu]) = %p\n", self, (unsigned long) buffer_table_size_new, buffer_table_new);
-  fprintf(stderr, "  %lu buffer_id %lu @ %p [%lu, %lu] %lu\n", (unsigned long) buffer_head.stats.buffer_n, (unsigned long) self->buffer_id, self, (unsigned long) buffer_id_min, (unsigned long) buffer_id_max, (unsigned long) buffer_table_size_new);
+  fprintf(stderr, "  %lu page_id %lu @ %p [%lu, %lu] %lu\n", (unsigned long) buffer_head.stats.buffer_n, (unsigned long) self->page_id, self, (unsigned long) page_id_min, (unsigned long) page_id_max, (unsigned long) buffer_table_size_new);
 #endif
 
   smal_thread_rwlock_wrlock(&buffer_table_lock);
@@ -342,7 +342,7 @@ void smal_buffer_table_add(smal_buffer *self)
     for ( i = 0; i < buffer_table_size; ++ i ) {
       smal_buffer *x = buffer_table[i];
       if ( x ) {
-	size_t j = _smal_buffer_buffer_id(x) % buffer_table_size_new;
+	size_t j = smal_buffer_page_id(x) % buffer_table_size_new;
 	assert(! buffer_table_new[j]);
 	buffer_table_new[j] = x;
       }
@@ -354,7 +354,7 @@ void smal_buffer_table_add(smal_buffer *self)
   buffer_table = buffer_table_new;
   buffer_table_size = buffer_table_size_new;
 
-  i = _smal_buffer_buffer_id(self) % buffer_table_size;
+  i = smal_buffer_page_id(self) % buffer_table_size;
   assert(! buffer_table[i]);
   buffer_table[i] = self;
 
@@ -375,7 +375,7 @@ void smal_buffer_table_remove(smal_buffer *self)
   size_t i;
 
   smal_thread_rwlock_wrlock(&buffer_table_lock);
-  i = self->buffer_id % buffer_table_size;
+  i = smal_buffer_page_id(self) % buffer_table_size;
   assert(buffer_table[i] == self);
   buffer_table[i] = 0;
   smal_thread_rwlock_unlock(&buffer_table_lock);
@@ -387,14 +387,14 @@ void smal_buffer_table_remove(smal_buffer *self)
   // smal_thread_rwlock_unlock(&buffer_head_lock);
 
   /* Check for lock during collect. */
-  if ( ! smal_thread_lock_test(&buffer_id_min_max_keep) ) {  
+  if ( ! smal_thread_lock_test(&page_id_min_max_keep) ) {  
     /* Adjust buffer_table window. */
-    smal_thread_mutex_lock(&buffer_id_min_max_mutex);
+    smal_thread_mutex_lock(&page_id_min_max_mutex);
     /* Was buffer at beginning or end of buffer id space? */
-    if ( buffer_id_min == self->buffer_id || buffer_id_max == self->buffer_id ) {
-      buffer_id_min = buffer_id_max = 0;
+    if ( page_id_min == self->page_id || page_id_max == self->page_id ) {
+      page_id_min = page_id_max = 0;
     }
-    smal_thread_mutex_unlock(&buffer_id_min_max_mutex);
+    smal_thread_mutex_unlock(&page_id_min_max_mutex);
   }
 }
 
@@ -420,82 +420,93 @@ static
 smal_buffer *smal_buffer_alloc(smal_type *type)
 {
   smal_buffer *self;
-  size_t size;
-  void *addr;
+  size_t mmap_size;
+  void *mmap_addr;
   size_t offset;
   int result;
+  int ok = 0;
   
   smal_debug(1, "()");
 
   /* Attempt first alignment via exact size. */
-  size = smal_buffer_size;
-  addr = mmap((void*) 0, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, (off_t) 0);
-  smal_debug(2, " mmap(..., 0x%lx) = %p", (unsigned long) size, (void*) addr);
+  mmap_size = smal_page_size;
+  mmap_addr = mmap((void*) 0, mmap_size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, (off_t) 0);
+  smal_debug(2, " mmap(..., 0x%lx) = %p", (unsigned long) mmap_size, (void*) mmap_addr);
 
-  if ( addr == MAP_FAILED ) {
+  if ( mmap_addr == MAP_FAILED ) {
     smal_debug(3, "mmap failed: %s", strerror(errno));
     return 0;
   }
 
   /* Not aligned? */
-  if ( (offset = smal_buffer_offset(addr)) ) {
+  if ( (offset = smal_addr_page_offset(mmap_addr)) ) {
     void *keep_addr = 0, *free_addr = 0;
     size_t keep_size = 0, free_size = 0;
 
-    result = munmap(addr, size);
-    smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) addr, (unsigned long) size, (int) result);
+    result = munmap(mmap_addr, mmap_size);
+    smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) mmap_addr, (unsigned long) mmap_size, (int) result);
 
 #if 0
-    fprintf(stderr, "mmap retry, %p not aligned to 0x%lx\n", addr, (unsigned long) smal_buffer_size);
+    fprintf(stderr, "mmap retry, %p not aligned to 0x%lx\n", mmap_addr, (unsigned long) smal_page_size);
 #endif
 
-    /* mmap() enough to ensure a buffer of smal_buffer_size, aligned to smal_buffer_size */
+    /* mmap() enough to ensure a buffer of smal_page_size, aligned to smal_page_size */
     /* Allocate twice the size needed. */
-    size = smal_buffer_size * 2;
-    addr = mmap((void*) 0, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, (off_t) 0);
-    smal_debug(2, " mmap(..., 0x%lx) = %p", (unsigned long) size, (void*) addr);
+    mmap_size = smal_page_size * 2;
+    mmap_addr = mmap((void*) 0, mmap_size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, (off_t) 0);
+    smal_debug(2, " mmap(..., 0x%lx) = %p", (unsigned long) mmap_size, (void*) mmap_addr);
     
-    if ( addr == MAP_FAILED ) {
+    if ( mmap_addr == MAP_FAILED ) {
       smal_debug(3, "mmap failed: %s", strerror(errno));
       return 0;
     }
     
-    if ( (offset = smal_buffer_offset(addr)) ) {
-      smal_debug(3, "offset %p = 0x%0lx", (void*) addr, (unsigned long) offset);
-      free_addr = addr;
-      keep_addr = addr + (smal_buffer_size - offset);
-      free_size = keep_addr - addr;
-      keep_size = smal_buffer_size;
+    if ( (offset = smal_addr_page_offset(mmap_addr)) ) {
+      smal_debug(3, "offset %p = 0x%0lx", (void*) mmap_addr, (unsigned long) offset);
+      free_addr = mmap_addr;
+      keep_addr = mmap_addr + (smal_page_size - offset);
+      free_size = keep_addr - mmap_addr;
+      keep_size = smal_page_size;
       assert(keep_addr == free_addr + free_size);
     } else {
-      keep_addr = addr;
-      keep_size = smal_buffer_size;
-      free_addr = addr + smal_buffer_size;
-      free_size = size - keep_size;
+      keep_addr = mmap_addr;
+      keep_size = smal_page_size;
+      free_addr = mmap_addr + smal_page_size;
+      free_size = mmap_size - keep_size;
     }
     
     smal_debug(3, "keeping %p[0x%0lx]", (void*) keep_addr, (unsigned long) keep_size);
     smal_debug(3, "freeing %p[0x%0lx]", (void*) free_addr, (unsigned long) free_size);
     
-    assert(keep_addr >= addr);
-    assert(keep_addr + keep_size <= addr + size);
+    assert(keep_addr >= mmap_addr);
+    assert(keep_addr + keep_size <= mmap_addr + mmap_size);
     
     /* Return the unused, unaligned half. */
     result = munmap(free_addr, free_size);
     smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) free_addr, (unsigned long) free_size, (int) result);
 
-    addr = keep_addr;
-    size = keep_size;
+    mmap_addr = keep_addr;
+    mmap_size = keep_size;
   }
 
-  self = addr;
+#if SMAL_SEGREGATE_BUFFER_FROM_PAGE
+  if ( ! (self = malloc(sizeof(*self))) )
+    goto done;
+#else
+  self = mmap_addr;
+#endif
   memset(self, 0, sizeof(*self));
 
   self->type = type;
-  self->buffer_id = smal_buffer_buffer_id(self);
-  self->mmap_addr = addr;
-  self->mmap_size = size;
+  self->page_id = smal_addr_page_id(mmap_addr);
+  self->mmap_addr = mmap_addr;
+  self->mmap_size = mmap_size;
+#if SMAL_SEGREGATE_BUFFER_FROM_PAGE
+  *(void**) mmap_addr = self;
+  self->begin_ptr = mmap_addr + sizeof(void*);
+#else
   self->begin_ptr = self + 1;
+#endif
   self->type_buffer_list.buffer = self;
 
   smal_thread_mutex_init(&self->stats._mutex);
@@ -506,12 +517,7 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
 
   smal_thread_lock_init(&self->alloc_disabled);
 
-  if ( smal_buffer_set_object_size(self, type->object_size) < 0 ) {
-    smal_debug(2, " smal_buffer_set_object_size failed: %s", strerror(errno));
-    result = munmap(self->mmap_addr, self->mmap_size);
-    smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) self->mmap_addr, (unsigned long) self->mmap_size, (int) result);
-    self = 0;
-  } else {
+  if ( smal_buffer_set_object_size(self, type->object_size) >= 0 ) {
     smal_buffer_table_add(self);
 
     smal_thread_rwlock_wrlock(&type->buffers_lock);
@@ -520,10 +526,26 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
     smal_thread_rwlock_unlock(&type->buffers_lock);
 
     smal_LOCK_STATS(lock);
-    smal_UPDATE_STATS(buffer_n,  += 1);
-    smal_UPDATE_STATS(mmap_size, += self->mmap_size);
+    smal_UPDATE_STATS(buffer_id,  += 1); /* for global and type */
+    self->buffer_id = self->stats.buffer_id = buffer_head.stats.buffer_id;
+    smal_UPDATE_STATS(buffer_n,   += 1);
+    smal_UPDATE_STATS(mmap_size,  += self->mmap_size);
     smal_UPDATE_STATS(mmap_total, += self->mmap_size);
     smal_LOCK_STATS(unlock);
+  }
+
+  ok = 1;
+  goto done;
+
+ done:
+  if ( ! ok ) {
+    smal_debug(2, " smal_buffer_set_object_size failed: %s", strerror(errno));
+    result = munmap(mmap_addr, mmap_size);
+    smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) mmap_addr, (unsigned long) mmap_size, (int) result);
+#if SMAL_SEGREGATE_BUFFER_FROM_PAGE
+    free(self);
+#endif
+    self = 0;
   }
 
   smal_debug(1, "() = %p", (void*) self);
@@ -545,6 +567,7 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
   self->object_size = smal_buffer_object_size(self);
 
   /* Default alignment to sizeof(double) */
+  self->object_alignment = self->type->object_alignment;
   if ( ! self->object_alignment )
     self->object_alignment = sizeof(double);
 
@@ -674,6 +697,10 @@ void smal_buffer_free(smal_buffer *self)
 
   // fprintf(stderr, "b");
 
+#if SMAL_SEGREGATE_BUFFER_FROM_PAGE
+  free(self);
+#endif
+
   result = munmap(addr, size);
   smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) addr, (unsigned long) size, (int) result);
 }
@@ -699,8 +726,9 @@ void smal_buffer_free(smal_buffer *self)
 static inline
 void _smal_buffer_mark_ptr(smal_buffer *buf, void *ptr)
 {
-  smal_thread_rwlock_rdlock(&buf->mark_bits_lock);
-  // assert(buf->buffer_id == smal_buffer_buffer_id(buf));
+  assert(in_collect); /* mark_bits should only be touched by smal_collect() and its thread. */
+  // smal_thread_rwlock_rdlock(&buf->mark_bits_lock);
+  // assert(buf->page_id == smal_buffer_page_id(buf));
 #if 0
   smal_debug(6, "ptr %p is valid in buf %p", ptr, buf);
   smal_debug(7, "smal_buffer_mark_word(%p, %p) = 0x%08x", buf, ptr,
@@ -710,15 +738,15 @@ void _smal_buffer_mark_ptr(smal_buffer *buf, void *ptr)
 #if 0
     smal_debug(5, "ptr %p is unmarked", ptr);
 #endif
-    smal_thread_rwlock_unlock(&buf->mark_bits_lock);
-    smal_thread_rwlock_wrlock(&buf->mark_bits_lock);
+    // smal_thread_rwlock_unlock(&buf->mark_bits_lock);
+    // smal_thread_rwlock_wrlock(&buf->mark_bits_lock);
     smal_buffer_mark(buf, ptr);
-    smal_thread_rwlock_unlock(&buf->mark_bits_lock);
+    // smal_thread_rwlock_unlock(&buf->mark_bits_lock);
     // fprintf(stderr, "M");
     buf->type->mark_func(ptr);
     return;
   }
-  smal_thread_rwlock_unlock(&buf->mark_bits_lock);
+  // smal_thread_rwlock_unlock(&buf->mark_bits_lock);
 }
 
 static inline
@@ -889,9 +917,14 @@ void *smal_buffer_alloc_object(smal_buffer *self)
     assert(buffer_head.stats.avail_n > 0);
     smal_UPDATE_STATS(avail_n, -= 1);
 
-    smal_thread_rwlock_wrlock(&self->mark_bits_lock);
-    smal_buffer_mark(self, ptr);
-    smal_thread_rwlock_unlock(&self->mark_bits_lock);
+    /* If during collection, assume smal_alloc() is a rentrant call or from another thread,
+       protect it from sweep.
+    */
+    if ( in_collect ) {
+      // smal_thread_rwlock_wrlock(&self->mark_bits_lock);
+      smal_buffer_mark(self, ptr);
+      // smal_thread_rwlock_unlock(&self->mark_bits_lock);
+    }
   } else {
     assert(self->stats.avail_n == 0);
   }
@@ -945,9 +978,9 @@ void smal_buffer_before_mark(smal_buffer *self)
   smal_buffer_stop_allocations(self);
 
   /* Clear mark bits. */
-  smal_thread_rwlock_wrlock(&self->mark_bits_lock);
+  // smal_thread_rwlock_wrlock(&self->mark_bits_lock);
   smal_bitmap_clr_all(&self->mark_bits);
-  smal_thread_rwlock_unlock(&self->mark_bits_lock);
+  // smal_thread_rwlock_unlock(&self->mark_bits_lock);
 
   /* Prepare to re-compute live_n. */
   smal_thread_mutex_lock(&self->stats._mutex);
@@ -968,7 +1001,7 @@ void smal_buffer_sweep(smal_buffer *self)
 
   // fprintf(stderr, "  s_b_s(b@%p)\n", self);
 
-  smal_thread_rwlock_wrlock(&self->mark_bits_lock);
+  // smal_thread_rwlock_wrlock(&self->mark_bits_lock);
   smal_thread_rwlock_wrlock(&self->free_bits_lock);
   smal_thread_mutex_lock(&self->free_list_mutex);
 
@@ -995,7 +1028,7 @@ void smal_buffer_sweep(smal_buffer *self)
 
   smal_thread_mutex_unlock(&self->free_list_mutex);
   smal_thread_rwlock_unlock(&self->free_bits_lock);
-  smal_thread_rwlock_unlock(&self->mark_bits_lock);
+  // smal_thread_rwlock_unlock(&self->mark_bits_lock);
 
   smal_debug(4, "  live_n = %d, stats.free_n = %d",
 	     live_n, self->stats.free_n);
@@ -1030,16 +1063,16 @@ void _smal_collect_inner()
  
   smal_collect_before_mark();
 
-  ++ in_collect;
-
   /* Wait until allocators are done, then:
      Pause allocators while current buffers are being paused and moved
      elsewhere.
   */
   smal_thread_rwlock_wrlock(&alloc_lock);
 
-  /* Prevent invalidating buffer_id min, max. */
-  smal_thread_lock_lock(&buffer_id_min_max_keep);
+  ++ in_collect;
+
+  /* Prevent invalidating page_id min, max. */
+  smal_thread_lock_lock(&page_id_min_max_keep);
 
   smal_thread_rwlock_wrlock(&buffer_head_lock);
   smal_thread_rwlock_wrlock(&buffer_collecting_lock);
@@ -1089,8 +1122,8 @@ void _smal_collect_inner()
   -- in_sweep;
   smal_thread_rwlock_unlock(&buffer_collecting_lock);
 
-  /* Allow invalidation of buffer_id min, max. */
-  smal_thread_lock_unlock(&buffer_id_min_max_keep);
+  /* Allow invalidation of page_id min, max. */
+  smal_thread_lock_unlock(&page_id_min_max_keep);
 
   -- in_collect;
 
@@ -1112,7 +1145,8 @@ void _smal_collect_inner()
 smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free_func free_func)
 {
   smal_type *self;
-  
+  size_t object_alignment = 0;
+
   if ( ! initialized ) initialize();
 
   /* must be big enough for free list next pointer. */
@@ -1120,6 +1154,9 @@ smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free
     object_size = sizeof(void*);
   /* Align size to at least sizeof(double) */
   smal_ALIGN(object_size, sizeof(double));
+
+  if ( ! object_alignment )
+    object_alignment = sizeof(double);
 
   if ( ! mark_func )
     mark_func = null_func;
@@ -1141,6 +1178,7 @@ smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free
   memset(self, 0, sizeof(*self));
   self->type_id = ++ type_head.type_id;
   self->object_size = object_size;
+  self->object_alignment = object_alignment;
   self->mark_func = mark_func;
   self->free_func = free_func;
   smal_dllist_init(&self->buffers);
@@ -1291,7 +1329,7 @@ void smal_free(void *ptr)
   if ( (buf = smal_ptr_to_buffer(ptr)) ) {
     smal_debug(5, "ptr %p => buf %p", ptr, buf);
     if ( smal_buffer_ptr_is_validQ(buf, ptr) ) {
-      assert(buf->buffer_id == smal_buffer_buffer_id(buf));
+      assert(buf->page_id == smal_buffer_page_id(buf));
       smal_debug(6, "ptr %p is valid in buf %p", ptr, buf);
       smal_thread_mutex_lock(&buf->free_list_mutex);
       smal_thread_rwlock_wrlock(&buf->free_bits_lock);
@@ -1408,17 +1446,17 @@ static void _initialize()
   smal_thread_rwlock_init(&buffer_head_lock);
   smal_thread_mutex_init(&buffer_head.stats._mutex);
   smal_thread_rwlock_init(&buffer_collecting_lock);
-  smal_thread_mutex_init(&buffer_id_min_max_mutex);
+  smal_thread_mutex_init(&page_id_min_max_mutex);
   smal_thread_rwlock_init(&buffer_table_lock);
 
-  smal_thread_lock_init(&buffer_id_min_max_keep);
+  smal_thread_lock_init(&page_id_min_max_keep);
   smal_thread_lock_init(&_smal_collect_inner_lock);
 
   smal_dllist_init(&buffer_head);
   smal_dllist_init(&buffer_collecting);
   smal_dllist_init(&type_head);
 
-  buffer_id_min = 0; buffer_id_max = 0;
+  page_id_min = 0; page_id_max = 0;
   buffer_table_size = 1;
   buffer_table =   malloc(sizeof(buffer_table[0]) * buffer_table_size);
   memset(buffer_table, 0, sizeof(buffer_table[0]) * buffer_table_size);

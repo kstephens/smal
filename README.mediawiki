@@ -33,7 +33,7 @@ It does, however, optionally support:
 
 <code>smal_type</code> represents a user-data type of a fixed size, mark and free callbacks.
 
-<code>smal_buffer</code> represents a <code>mmap()</code> region of <code>smal_buffer_size</code> aligned to <code>smal_buffer_size</code>.
+<code>smal_buffer</code> represents a <code>mmap()</code> region of <code>smal_page_size</code> aligned to <code>smal_page_size</code>.
 Each <code>smal_buffer</code> is at the head of an <code>mmap()</code> region.
 
 == Types ==
@@ -43,10 +43,10 @@ Each <code>smal_buffer</code> is at the head of an <code>mmap()</code> region.
 
 == Buffer Allocation ==
 
-Each <code>smal_buffer</code> and its object allocation region are allocated from the OS via <code>mmap()</code> and is ensured to be aligned to <code>smal_buffer_size</code>.
+Each <code>smal_buffer</code> and its object allocation region are allocated from the OS via <code>mmap()</code> and is ensured to be aligned to <code>smal_page_size</code>.
 The reasons for this aggressive alignment are discussed below.
-This is achieved by attempting to allocate <code>smal_buffer_size</code> bytes using <code>MAP_ANON</code> <code>mmap()</code>.  
-If this buffer not aligned, SMAL <code>munmap()</code>s the attempted buffer and <code>mmap()</code>s <code>smal_buffer_size * 2</code> bytes and subsequently <code>munmap()</code>s the unaligned portion. 
+This is achieved by attempting to allocate <code>smal_page_size</code> bytes using <code>MAP_ANON</code> <code>mmap()</code>.  
+If this buffer not aligned, SMAL <code>munmap()</code>s the attempted buffer and <code>mmap()</code>s <code>smal_page_size * 2</code> bytes and subsequently <code>munmap()</code>s the unaligned portion. 
 
 == Object Allocation ==
 
@@ -79,15 +79,15 @@ suitable for conservative and non-conservative collection.
 
 === Invariants ===
 
-Every potential pointer maps to a unique <code>buffer_id</code>, computed
-by dividing a <code>smal_buffer*</code> address by <code>smal_buffer_size</code>.
+Every potential pointer maps to a unique <code>page_id</code>, computed
+by dividing a <code>smal_buffer*</code> address by <code>smal_page_size</code>.
 
-Since the <code>smal_buffer</code> header is always aligned to <code>smal_buffer_size</code>, 
-it is trivial to map a potential object pointer to a potential <code>smal_buffer*</code> or it's <code>buffer_id</code>.
+Since the <code>smal_buffer</code> header is always aligned to <code>smal_page_size</code>, 
+it is trivial to map a potential object pointer to a potential <code>smal_buffer*</code> or it's <code>page_id</code>.
 
-A non-colliding hash table mapping <code>buffer_id</code>s to <code>smal_buffer*</code>s is maintained.
-A lack of an table entry for a given <code>buffer_id</code>, means that any potential
-pointer mapping within the aligned <code>smal_buffer_size</code> region associated with the <code>buffer_id</code> 
+A non-colliding hash table mapping <code>page_id</code>s to <code>smal_buffer*</code>s is maintained.
+A lack of an table entry for a given <code>page_id</code>, means that any potential
+pointer mapping within the aligned <code>smal_page_size</code> region associated with the <code>page_id</code> 
 is not an object pointer allocated from a <code>smal_buffer</code>.
 
 === Performance Characteristics ===
@@ -102,8 +102,8 @@ This operation takes 8 x86 instructions.
 
 === Issues ===
 
-* SMAL cannot service allocations larger than <code>smal_buffer_size - sizeof(smal_buffer)</code>.
-* The <code>buffer_id</code> hash table may become large and sparse when <code>mmap()</code> tends to not allocate <code>smal_buffer</code>s in a mostly-contigious fashion -- other active allocators (e.g.: <code>malloc()</code>) may cause holes in the address space consumed by SMAL.
+* SMAL cannot service allocations larger than <code>smal_page_size - sizeof(smal_buffer) - object_alignment</code>.
+* The <code>page_id</code> hash table may become large and sparse when <code>mmap()</code> tends to not allocate <code>smal_buffer</code>s in a mostly-contigious fashion -- other active allocators (e.g.: <code>malloc()</code>) may cause holes in the address space consumed by SMAL.
 
 == Object Mark Bits ==
 

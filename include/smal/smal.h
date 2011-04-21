@@ -19,6 +19,9 @@ typedef void (*smal_free_func)(void *ptr);
 struct smal_type;
 typedef struct smal_type smal_type;
 
+struct smal_type_descriptor;
+typedef struct smal_type_descriptor smal_type_descriptor;
+
 struct smal_bitmap;
 typedef struct smal_bitmap smal_bitmap;
 
@@ -46,6 +49,7 @@ typedef struct smal_stats smal_stats;
 struct smal_stats {
   size_t alloc_id; /* may wrap. */
   size_t free_id; /* may wrap. */
+  size_t buffer_id; /* may wrap. */
   size_t capacity_n; /* number of object that can be allocated with current buffers. */
   size_t alloc_n; /* number of objects allocated. */
   size_t avail_n; /* number of objects either unallocated or on free_list. */
@@ -59,12 +63,21 @@ struct smal_stats {
 };
 extern const char *smal_stats_names[];
 
+struct smal_type_descriptor {
+  size_t object_size;
+  size_t object_alignment;
+  smal_mark_func mark_func;
+  smal_free_func free_func;
+  void *opaque;
+};
+
 struct smal_type {
   smal_type *next, *prev; /* global list of all smal_types. */
   smal_buffer_list buffers;
   smal_thread_rwlock buffers_lock;
   size_t type_id;
   size_t object_size;
+  size_t object_alignment;
   smal_mark_func mark_func;
   smal_free_func free_func;
   smal_buffer *alloc_buffer;
@@ -84,7 +97,8 @@ struct smal_buffer {
   smal_buffer *next, *prev; /* global list of all smal_buffers. */
   smal_buffer_list type_buffer_list; /* list of all smal_buffers of this buffer's type. */
 
-  size_t buffer_id;
+  size_t buffer_id; /* unique for each allocated smal_buffer. */
+  size_t page_id; /* related to the address of mmap_addr. */
   smal_type *type;
 
   size_t object_size; /* == type->object_size. */
