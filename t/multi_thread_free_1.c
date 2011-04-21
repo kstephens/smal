@@ -57,6 +57,7 @@ int main(int argc, char **argv)
 
   fprintf(stderr, "  parent exiting\n");
 
+  fprintf(stderr, "\n%s OK\n", argv[0]);
   return 0;
 }
 
@@ -67,6 +68,8 @@ int main(int argc, char **argv)
 int main(int argc, char **argv)
 {
   fprintf(stderr, "skipping %s\n", __FILE__);
+
+  fprintf(stderr, "\n%s OK\n", argv[0]);
   return 0;
 }
 

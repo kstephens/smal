@@ -101,6 +101,7 @@ int main(int argc, char **argv)
   
   smal_shutdown();
 
+  fprintf(stderr, "\n%s OK\n", argv[0]);
   return 0;
 }
 

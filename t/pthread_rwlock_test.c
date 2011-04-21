@@ -51,5 +51,6 @@ int main(int argc, char **argv)
   my_ASSERT(pthread_rwlock_destroy(&lock_1), == 0);
   my_ASSERT(pthread_rwlock_destroy(&lock_2), == 0);
 
+  fprintf(stderr, "\n%s OK\n", argv[0]);
   return 0;
 }

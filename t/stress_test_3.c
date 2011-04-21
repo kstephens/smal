@@ -72,6 +72,7 @@ int main(int argc, char **argv)
   
   fprintf(stdout, "\nOK\n");
   
+  fprintf(stderr, "\n%s OK\n", argv[0]);
   return 0;
 }
 

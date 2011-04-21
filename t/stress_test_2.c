@@ -112,6 +112,7 @@ int main(int argc, char **argv)
   fprintf(stdout, "%lu smal_each_object\n", smal_each_object_n);
   fprintf(stdout, "%lu smal_collect\n", smal_collect_n);
   
+  fprintf(stderr, "\n%s OK\n", argv[0]);
   return 0;
 }
 

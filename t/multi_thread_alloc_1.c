@@ -63,6 +63,8 @@ int main(int argc, char **argv)
   fprintf(stderr, "  parent exiting\n");
   my_print_stats();
 
+  fprintf(stderr, "\n%s OK\n", argv[0]);
+
   return 0;
 }
 

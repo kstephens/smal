@@ -146,6 +146,7 @@ int main(int argc, char **argv)
 
   fprintf(stderr, "  main exiting\n");
 
+  fprintf(stderr, "\n%s OK\n", argv[0]);
   return 0;
 }
 
@@ -156,6 +157,8 @@ int main(int argc, char **argv)
 int main(int argc, char **argv)
 {
   fprintf(stderr, "no pthread support: skipping %s\n", __FILE__);
+
+  fprintf(stderr, "\n%s OK\n", argv[0]);
   return 0;
 }
 

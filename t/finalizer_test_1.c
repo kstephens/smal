@@ -88,5 +88,7 @@ int main(int argc, char **argv)
 
   smal_roots_end();
 
+  fprintf(stderr, "\n%s OK\n", argv[0]);
+
   return 0;
 }

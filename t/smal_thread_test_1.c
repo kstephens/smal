@@ -67,5 +67,6 @@ int main(int argc, char **argv)
 
   fprintf(stderr, "  parent exiting\n");
 
+  fprintf(stderr, "\n%s OK\n", argv[0]);
   return 0;
 }
