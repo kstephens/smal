@@ -79,9 +79,10 @@ void smal_roots_set_current(smal_roots *roots)
 }
 
 static
-void mark_thread(smal_thread *t, void *arg)
+int mark_thread(smal_thread *t, void *arg)
 {
   mark_roots(t->roots);
+  return 0;
 }
 
 void smal_roots_mark_chain()
@@ -89,5 +90,4 @@ void smal_roots_mark_chain()
   mark_roots(global_roots);
   smal_thread_each(mark_thread, 0);
 }
-
 

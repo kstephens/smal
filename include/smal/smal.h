@@ -116,25 +116,32 @@ extern int smal_debug_level;
 
 smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free_func free_func);
 void smal_type_free(smal_type *type);
-void *smal_alloc(smal_type *type);
+
+void smal_alloc_p(smal_type *type, void **ptrp); /* thread-safe */
+void *smal_alloc(smal_type *type); /* not thread-safe: reference is returned in a register. */
 void smal_free(void *ptr);
-void smal_mark_ptr(void *ptr); /* user can call this method. */
+void smal_free_p(void **ptrp);
+
+/* Collection. */
+void smal_collect(); /* thread-safe. */
+
+void smal_mark_ptr(void *ptr); /* user can call this method during smal_collect(): */
+void smal_mark_ptr_p(void **ptrp);
 void smal_mark_ptr_exact(void *ptr); /* assumes ptr is 0 or known to be properly allocated and aligned. */
 void smal_mark_ptr_range(void *ptr, void *ptr_end); /* Assumes arbitrary alignments of pointers within region. */
 void smal_mark_bindings(int n_bindings, void ***bindings);
 
-void smal_collect(); /* user can call this method. */
-
-/* If func() returns < 0; stop iterating. */
+/* If func() returns < 0; stop iterating, returns < 0 if func() < 0. */
 int smal_each_object(int (*func)(smal_type *type, void *ptr, void *arg), void *arg);
 
 /* Completely shuts down smal.  Frees all allocated memory. */
 void smal_shutdown();
 
-void smal_global_stats(smal_stats *stats);
-void smal_type_stats(smal_type *type, smal_stats *stats);
+/* Get stats. */
+void smal_global_stats(smal_stats *stats); /* thread-safe */
+void smal_type_stats(smal_type *type, smal_stats *stats); /* thread-safe */
 
-/* Functions that must be defined by users: */
+/* smal_collect() callbacks: must be defined by users: */
 
 void smal_collect_inner_before(void *top_of_stack);
 void smal_collect_before_mark();

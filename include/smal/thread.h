@@ -33,6 +33,12 @@ typedef struct smal_thread {
 #else
   void *thread;
 #endif
+  enum { 
+    smal_thread_INIT = 0,
+    smal_thread_ALIVE,
+    smal_thread_PAUSED,
+    smal_thread_DEAD,
+  } status;
   void *roots;
   void *bottom_of_stack;
   void *top_of_stack;
@@ -54,8 +60,9 @@ int smal_thread_do_once(smal_thread_once *once, void (*init_routine)());
 
 void smal_thread_init(); // ???
 smal_thread *smal_thread_self();
+void smal_thread_died(smal_thread *t); //
 int smal_thread_getstack(smal_thread *t, void **addrp, size_t *sizep);
-void smal_thread_each(void (*func)(smal_thread *t, void *arg), void *arg);
+int smal_thread_each(int (*func)(smal_thread *t, void *arg), void *arg);
 
 int smal_thread_mutex_init(smal_thread_mutex *m);
 int smal_thread_mutex_destroy(smal_thread_mutex *m);

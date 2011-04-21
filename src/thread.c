@@ -66,10 +66,9 @@ int _smal_thread_getstack_main(smal_thread *t, void **addrp, size_t *sizep)
 #if SMAL_PTHREAD
 
 static smal_thread thread_list;
+static pthread_rwlock_t thread_list_lock = PTHREAD_RWLOCK_INITIALIZER;
 
 static pthread_key_t roots_key;
-
-static pthread_mutex_t thread_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 #if 0
 static
@@ -77,27 +76,35 @@ void thread_exit(void *arg)
 {
   smal_thread *t = arg;
   // fprintf(stderr, "  thread_exit() %p\n", (void*) pthread_self());
-  pthread_mutex_lock(&thread_list_mutex);
+  pthread_rwlock_rwlock(&thread_list_lock);
   smal_DLLIST_DELETE(t);
+  pthread_rwlock_unlock(&thread_list_lock);
   free(t);
-  pthread_mutex_unlock(&thread_list_mutex);
 }
 #endif
 
 static
-void thread_init(smal_thread *t)
+void thread_init(smal_thread* t)
 {
-  pthread_mutex_lock(&thread_list_mutex);
-
+  memset(t, 0, sizeof(*t));
   t->thread = pthread_self();
-  t->roots = 0;
-  
-  smal_dllist_insert(&thread_list, t);
-  
   pthread_setspecific(roots_key, t);
 
-  pthread_mutex_unlock(&thread_list_mutex);
+  pthread_rwlock_wrlock(&thread_list_lock);
+  smal_dllist_insert(&thread_list, t);
+  pthread_rwlock_unlock(&thread_list_lock);
+
+  t->status = smal_thread_ALIVE;
 }
+
+static
+smal_thread *thread_register_self()
+{
+  smal_thread *t = malloc(sizeof(*t));
+  thread_init(t);
+  return t;
+}
+
 
 static
 void thread_prepare()
@@ -114,13 +121,8 @@ void thread_parent()
 static
 void thread_child()
 {
-  smal_thread *t;
-
   // fprintf(stderr, "  thread_child() %p\n", (void*) pthread_self());
 
-  t = malloc(sizeof(*t));
-  memset(t, 0, sizeof(*t));
-  thread_init(t);
 
   // fprintf(stderr, "  thread_child() %p = %p\n", (void*) pthread_self(), t);
 }
@@ -130,22 +132,21 @@ static
 void _smal_thread_init()
 {
   if ( ! thread_inited ) {
-    pthread_mutex_init(&thread_list_mutex, 0);
-    pthread_mutex_lock(&thread_list_mutex);
-    
-    smal_dllist_init(&thread_list);
-
     pthread_key_create(&roots_key, 0);
+
+    pthread_rwlock_init(&thread_list_lock, 0);
+    
+    pthread_rwlock_wrlock(&thread_list_lock);
+    smal_dllist_init(&thread_list);
+    pthread_rwlock_unlock(&thread_list_lock);
 
     pthread_atfork(thread_prepare,
 		   thread_parent,
 		   thread_child);
     
-    pthread_mutex_unlock(&thread_list_mutex);
-
     thread_init(&thread_main);
 
-#if SMAL_THREAD_MUTEX_DEBUG >= 1
+#if SMAL_THREAD_MUTEX_DEBUG >= 2
     atexit(mutex_stats);
 #endif
 
@@ -158,14 +159,6 @@ void smal_thread_init()
   if ( ! thread_inited ) { /* fast,unsafe lock */
     (void) pthread_once(&_smal_thread_is_initialized, _smal_thread_init);
   }
-#if SMAL_THREAD_MUTEX_DEBUG >= 2
-  static int once;
-  if ( ! once ) {
-    once = 1;
-    atexit(mutex_stats);
-  }
-#endif
-
 }
 
 smal_thread *smal_thread_self()
@@ -174,15 +167,23 @@ smal_thread *smal_thread_self()
 
   {
     smal_thread *t = pthread_getspecific(roots_key);
-    if ( ! t ) {
-      thread_child();
-      t = pthread_getspecific(roots_key);
-    }
+    if ( ! t )
+      t = thread_register_self();
     assert(t);
     // fprintf(stderr, "smal_thread_self() = %p: %p\n", t, (void*) t->thread);
     return t;
   }
 }
+
+void smal_thread_died(smal_thread *t)
+{
+  if ( ! t ) t = smal_thread_self();
+  assert(t->status == smal_thread_ALIVE);
+  t->status = smal_thread_DEAD;
+  t->bottom_of_stack = t->top_of_stack = 0;
+  memset(&t->registers, 0, sizeof(t->registers));
+}
+
 
 int smal_thread_getstack(smal_thread *t, void **addrp, size_t *sizep)
 {
@@ -190,19 +191,19 @@ int smal_thread_getstack(smal_thread *t, void **addrp, size_t *sizep)
   return _smal_thread_getstack_main(t, addrp, sizep);
 }
 
-void smal_thread_each(void (*func)(smal_thread *t, void *arg), void *arg)
+int smal_thread_each(int (*func)(smal_thread *t, void *arg), void *arg)
 {
-  pthread_mutex_lock(&thread_list_mutex);
+  int result = 0;
+  smal_thread *t;
+  
+  pthread_rwlock_rdlock(&thread_list_lock);
+  smal_dllist_each(&thread_list, t); {
+    result = func(t, arg);
+    if ( result < 0 ) break;
+  } smal_dllist_each_end();
+  pthread_rwlock_unlock(&thread_list_lock);
 
-  {
-    smal_thread *t;
-    
-    smal_dllist_each(&thread_list, t); {
-      func(t, arg);
-    } smal_dllist_each_end();
-  }
-
-  pthread_mutex_unlock(&thread_list_mutex);
+  return result;
 }
 
 int smal_thread_do_once(smal_thread_once *once, void (*init_routine)())
@@ -231,9 +232,9 @@ int smal_thread_getstack(smal_thread *t, void **addrp, size_t *sizep)
   return _smal_thread_getstack_main(t, addrp, sizep);
 }
 
-void smal_thread_each(void (*func)(smal_thread *t, void *arg), void *arg)
+int smal_thread_each(int (*func)(smal_thread *t, void *arg), void *arg)
 {
-  func(&thread_main, arg);
+  return func(&thread_main, arg);
 }
 
 int smal_thread_do_once(smal_thread_once *once, void (*init_routine)())
@@ -246,6 +247,11 @@ int smal_thread_do_once(smal_thread_once *once, void (*init_routine)())
 }
 
 #endif
+
+void smal_thread_save_registers(smal_thread *thread)
+{
+  setjmp(thread->registers._jb);
+}
 
 int smal_thread_mutex_init(smal_thread_mutex *mutex)
 {

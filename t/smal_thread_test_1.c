@@ -8,9 +8,10 @@
 #include <unistd.h>
 #include <stdio.h>
 
-static void print_thread(smal_thread *t, void *arg)
+static int print_thread(smal_thread *t, void *arg)
 {
   fprintf(stderr, "  t %p\n", t);
+  return 0;
 }
 
 static void* thread_func(void *arg)
