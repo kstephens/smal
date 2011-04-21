@@ -492,10 +492,11 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
 #if SMAL_SEGREGATE_BUFFER_FROM_PAGE
   if ( ! (self = malloc(sizeof(*self))) )
     goto done;
-#else
-  self = mmap_addr;
-#endif
   memset(self, 0, sizeof(*self));
+#else
+  self = mmap_addr; 
+  /* Assume mmap() memory is zeroed. */
+#endif
 
   self->type = type;
   self->page_id = smal_addr_page_id(mmap_addr);
