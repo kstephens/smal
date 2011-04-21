@@ -33,7 +33,7 @@ static void initialize();
 #endif
 
 #ifndef smal_buffer_size_default
-#define smal_buffer_size_default (4 * 4 * 1024)
+#define smal_buffer_size_default ((size_t) (4 * 4 * 1024))
 #endif
 
 #define smal_buffer_size smal_buffer_size_default
@@ -205,7 +205,7 @@ static smal_thread_lock _smal_collect_inner_lock;
 
 #define _smal_buffer_buffer_id(PTR) (((size_t) (PTR)) / smal_buffer_size)
 #define _smal_buffer_offset(PTR) (((size_t) (PTR)) & smal_buffer_mask)
-#define _smal_buffer_addr(PTR) ((void*)(((size_t) (PTR)) & ~smal_buffer_mask))
+#define _smal_buffer_page(PTR) ((void*)(((size_t) (PTR)) & ~smal_buffer_mask))
 
 size_t smal_buffer_buffer_id(void *ptr) {
   return _smal_buffer_buffer_id(ptr);
@@ -217,10 +217,10 @@ size_t smal_buffer_offset(void *ptr) {
 }
 #define smal_buffer_offset(PTR) _smal_buffer_offset(PTR)
 
-smal_buffer *smal_buffer_addr(void *ptr) {
-  return _smal_buffer_addr(ptr);
+smal_buffer *smal_buffer_page(void *ptr) {
+  return _smal_buffer_page(ptr);
 }
-#define smal_buffer_addr(PTR) _smal_buffer_addr(PTR)
+#define smal_buffer_page(PTR) _smal_buffer_page(PTR)
 
 static int in_collect;
 static int in_mark;
@@ -239,6 +239,29 @@ void null_func(void *ptr)
 
 #define smal_ptr_to_buffer(PTR)						\
   smal_WITH_RDLOCK(&buffer_table_lock, smal_buffer*, buffer_table[smal_buffer_buffer_id(PTR) % buffer_table_size])
+
+#if 0
+
+/* Pointer to small_buffer is stored in first word of mmap region. */
+#define smal_addr_to_buffer(PTR)		\
+  (*((smal_buffer**)(smal_buffer_page(PTR))))
+
+#define smal_buffer_to_addr(BUF)		\
+  ((void*) (BUF)->mmap_addr)
+
+#else
+
+/* smal_buffer is stored at head of mmap region. */
+#define smal_addr_to_buffer(PTR)		\
+  (((smal_buffer*)(smal_buffer_page(PAGE))))
+
+#define smal_buffer_to_addr(BUF)		\
+  ((void*) (BUF))
+
+#endif
+
+#define smal_buffer_i(BUF, PTR) \
+  (((void*)(PTR) - (void*)(BUF)) / smal_buffer_object_size(BUF))
 
 #define smal_buffer_alloc_ptr(BUF)				       \
   smal_WITH_MUTEX(&(BUF)->alloc_ptr_mutex, void*, (BUF)->alloc_ptr)	       \
@@ -659,8 +682,6 @@ void smal_buffer_free(smal_buffer *self)
  * bitmaps
  */
 
-#define smal_buffer_i(BUF, PTR) \
-  (((void*)(PTR) - (void*)(BUF)) / smal_buffer_object_size(BUF))
 
 /************************************************************************************
  * Mark bits
@@ -712,11 +733,79 @@ void _smal_mark_ptr(void *ptr)
   }
 }
 
+/********************************************************************
+ * Marking
+ */
+
+#ifndef SMAL_MARK_QUEUE
+#define SMAL_MARK_QUEUE 0
+#endif
+
+#if SMAL_MARK_QUEUE
+/* Use mark_stack.h */
+#include "mark_stack.h"
+
+void smal_mark_ptr(void *ptr)
+{
+  smal_mark_queue_add_one(ptr);
+}
+
+#define smal_mark_ptr_inner(PTR) smal_mark_ptr(PTR)
+
+void smal_mark_bindings(int n, void ***bindings)
+{
+  smal_mark_queue_add(n, (void**) bindings, 1);
+}
+
+#else
+
 void smal_mark_ptr(void *ptr)
 {
   _smal_mark_ptr(ptr);
 }
 
+#define smal_mark_queue_start() ((void) 0)
+#define smal_mark_ptr_inner(PTR) _smal_mark_ptr(PTR)
+#define smal_mark_queue_mark_all() ((void) 0)
+
+void smal_mark_bindings(int n, void ***bindings)
+{
+  int i;
+  /* fprintf(stderr, "  roots %p [%d]\n", roots, roots->_n); */
+  for ( i = 0; i < n; ++ i ) {
+    void *ptr = * bindings[i];
+    /* fprintf(stderr, "  mark %p => %p\n", roots->_bindings[i], ptr); */
+    smal_mark_ptr(ptr);
+  }
+}
+#endif
+
+/* Deprecated. */
+void smal_mark_ptr_exact(void *ptr)
+{
+  smal_buffer *buf;
+  if ( ! ptr )
+    return;
+  buf = smal_ptr_to_buffer(ptr);
+  if ( smal_buffer_ptr_is_in_rangeQ(buf, ptr) ) {
+    _smal_buffer_mark_ptr(buf, ptr);
+  }
+}
+
+static inline
+void _smal_mark_ptr_range(void *ptr, void *ptr_end)
+{
+  // fprintf(stderr, "   smpr [%p, %p] ALIGNED\n", ptr, ptr_end);
+
+  while ( ptr < ptr_end ) {
+    void *p = *(void**) ptr;
+    if ( p ) {
+      // fprintf(stderr, "     smpr *%p = %p\n", ptr, p);
+      smal_mark_ptr(p);
+    }
+    ptr += sizeof(int);
+  }
+}
 
 void smal_mark_ptr_range(void *ptr, void *ptr_end)
 {
@@ -730,30 +819,11 @@ void smal_mark_ptr_range(void *ptr, void *ptr_end)
   smal_ALIGN(ptr, __alignof__(void*));
   ptr_end -= sizeof(void*) - 1;
 
-  // fprintf(stderr, "   smpr [%p, %p] ALIGNED\n", ptr, ptr_end);
-
-  while ( ptr < ptr_end ) {
-    void *p = *(void**) ptr;
-    if ( p ) {
-      // fprintf(stderr, "     smpr *%p = %p\n", ptr, p);
-      _smal_mark_ptr(p);
-    }
-    ptr += sizeof(int);
-  }
+  _smal_mark_ptr_range(ptr, ptr_end);
 }
 
 
-void smal_mark_ptr_exact(void *ptr)
-{
-  smal_buffer *buf;
-  if ( ! ptr )
-    return;
-  buf = smal_ptr_to_buffer(ptr);
-  if ( smal_buffer_ptr_is_in_rangeQ(buf, ptr) ) {
-    _smal_buffer_mark_ptr(buf, ptr);
-  }
-}
-
+/* Can only be called during collection. */
 int smal_object_reachableQ(void *ptr)
 {
   smal_buffer *buf;
@@ -993,7 +1063,9 @@ void _smal_collect_inner()
 
   // Mark roots.
   ++ in_mark;
+  smal_mark_queue_start();
   smal_collect_mark_roots();
+  smal_mark_queue_mark_all();
   -- in_mark;
 
   smal_collect_after_mark();
@@ -1174,7 +1246,7 @@ void *smal_alloc(smal_type *self)
   if ( ! (alloc_buffer = smal_type_alloc_buffer(self)) )
     goto done;
 
-  /* If current smal_buffer cannot provide. */
+  /* If current smal_buffer cannot provide, */
   if ( ! (ptr = smal_buffer_alloc_object(alloc_buffer)) ) {
     // fprintf(stderr, "  type %p buf %p EMPTY\n", self, self->alloc_buffer);
 

@@ -28,10 +28,13 @@ else
 CFLAGS_THREAD = #
 endif
 
-# CFLAGS_THREAD += -DSMAL_THREAD_MUTEX_DEBUG=3 #
-CFLAGS = $(CFLAGS_OPT) $(CFLAGS_PROF) -g -Wall -Werror $(CFLAGS_DEBUG) $(CFLAGS_ASSERT) $(CFLAGS_THREAD) -I$(INC_DIR) -Isrc #
+CFLAGS_MARK_QUEUE = #
+# CFLAGS_MARK_QUEUE = -DSMALL_MARK_QUEUE=1 #
 
-H_FILES := $(shell echo $(INC_DIR)/smal/*.h) #
+# CFLAGS_THREAD += -DSMAL_THREAD_MUTEX_DEBUG=3 #
+CFLAGS = $(CFLAGS_OPT) $(CFLAGS_PROF) -g -Wall -Werror $(CFLAGS_DEBUG) $(CFLAGS_ASSERT) $(CFLAGS_THREAD) $(CFLAGS_MARK_QUEUE) -I$(INC_DIR) -Isrc #
+
+H_FILES := $(shell echo $(INC_DIR)/smal/*.h src/*.h) #
 C_FILES := $(shell echo src/*.c) src/hash/voidP_voidP_Table.c #
 O_FILES := $(C_FILES:%.c=%.o) #
 TESTS_C := $(shell echo t/*.c) #
@@ -78,6 +81,17 @@ single:
 threaded-vs-single:
 	(make threaded && time t/stress_test_2.t; make single && time t/stress_test_2.t) 2>&1 | grep 'real'
 
+mark-queue:
+	make clean all CFLAGS_MARK_QUEUE='-DSMAL_MARK_QUEUE=1'
+
+non-mark-queue:
+	make clean all CFLAGS_MARK_QUEUE=''
+
+mark-queue-vs-non:
+	make mark-queue > /dev/null
+	(time t/stress_test_2.t) 2>&1 | grep 'real'
+	make non-mark-queue > /dev/null
+	(time t/stress_test_2.t) 2>&1 | grep 'real'
 
 both:
 	(make threaded && $(cmd) && make single && $(cmd))

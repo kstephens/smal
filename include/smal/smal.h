@@ -120,7 +120,8 @@ void *smal_alloc(smal_type *type);
 void smal_free(void *ptr);
 void smal_mark_ptr(void *ptr); /* user can call this method. */
 void smal_mark_ptr_exact(void *ptr); /* assumes ptr is 0 or known to be properly allocated and aligned. */
-void smal_mark_ptr_range(void *ptr, void *ptr_end);
+void smal_mark_ptr_range(void *ptr, void *ptr_end); /* Assumes arbitrary alignments of pointers within region. */
+void smal_mark_bindings(int n_bindings, void ***bindings);
 
 void smal_collect(); /* user can call this method. */
 

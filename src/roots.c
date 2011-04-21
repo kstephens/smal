@@ -61,13 +61,7 @@ static
 void mark_roots(smal_roots *roots)
 {
   while ( roots ) {
-    int i;
-    /* fprintf(stderr, "  roots %p [%d]\n", roots, roots->_n); */
-    for ( i = 0; i < roots->_bindings_n; ++ i ) {
-      void *ptr = * (void**) roots->_bindings[i];
-      /* fprintf(stderr, "  mark %p => %p\n", roots->_bindings[i], ptr); */
-      smal_mark_ptr(ptr);
-    }
+    smal_mark_bindings(roots->_bindings_n, (void ***) roots->_bindings);
     roots = roots->_next;
   }
 }

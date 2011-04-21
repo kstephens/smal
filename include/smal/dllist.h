@@ -23,6 +23,18 @@ typedef struct smal_dllist_head
     (H)->next = (void*) (X);			\
   } while (0)
 
+// Inserts all of B including B after A.
+#define smal_dllist_insert_all(A,B)		   \
+  do {						   \
+    smal_dllist_head				   \
+      *_a_next = (void*) ((A)->next),		   \
+      *_b_prev = (void*) ((B)->prev);		   \
+    (B)->prev = (void*) (A);			   \
+    (A)->next = (void*) (B);			   \
+    _b_prev->next = (void*) _a_next;		   \
+    _a_next->prev = (void*) _b_prev;		   \
+  } while ( 0 )
+
 #define smal_dllist_delete(X)			\
   do {						\
     (X)->prev->next = (X)->next;		\
