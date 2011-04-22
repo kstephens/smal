@@ -74,6 +74,11 @@ size_t smal_page_mask = smal_page_size_default - 1;
 #if SMAL_SEGREGATE_BUFFER_FROM_PAGE
 
 /* Pointer to small_buffer is stored in first word of mmap region. */
+struct smal_page {
+  smal_buffer *buffer;
+  double objects[0];
+};
+
 #define smal_addr_to_buffer(PTR)		\
   (*((smal_buffer**)(smal_addr_page(PTR))))
 
@@ -85,6 +90,11 @@ size_t smal_page_mask = smal_page_size_default - 1;
 #else
 
 /* smal_buffer is stored at head of mmap region. */
+struct smal_page {
+  smal_buffer buffer;
+  double objects[0];
+};
+
 #define smal_addr_to_buffer(PTR)		\
   (((smal_buffer*)(smal_addr_page(PTR))))
 
@@ -1098,6 +1108,10 @@ void _smal_collect_inner()
   // Mark roots.
   ++ in_mark;
   smal_mark_queue_start();
+  { 
+    smal_thread *thr = smal_thread_self();
+    smal_mark_ptr_range(&thr->registers, &thr->registers + 1);
+  }
   smal_collect_mark_roots();
   smal_mark_queue_mark_all();
   -- in_mark;

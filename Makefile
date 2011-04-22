@@ -81,7 +81,10 @@ single:
 	make clean all
 
 threaded-vs-single:
-	(make threaded && time t/stress_test_2.t; make single && time t/stress_test_2.t) 2>&1 | grep 'real'
+	make threaded > /dev/null
+	(time t/stress_test_2.t 2>&1) | grep 'real'
+	make single > /dev/null
+	(time t/stress_test_2.t 2>&1) | grep 'real'
 
 mark-queue:
 	make clean all CFLAGS_MARK_QUEUE='-DSMAL_MARK_QUEUE=1'
@@ -91,12 +94,20 @@ non-mark-queue:
 
 mark-queue-vs-non:
 	make mark-queue > /dev/null
-	(time t/stress_test_2.t) 2>&1 | grep 'real'
+	(time t/stress_test_2.t 2>&1) | grep 'real'
 	make non-mark-queue > /dev/null
-	(time t/stress_test_2.t) 2>&1 | grep 'real'
+	(time t/stress_test_2.t 2>&1) | grep 'real'
 
 seg-buffer:
 	make clean all CFLAGS_SEG_BUFFER='-DSMAL_SEGREGATE_BUFFER_FROM_PAGE=1'
+
+seg-buffer-vs-non:
+	make single > /dev/null
+	t/stress_test_2.t >/dev/null 2>&1
+	-(time t/stress_test_2.t 2>&1) | grep 'real'
+	make seg-buffer > /dev/null
+	t/stress_test_2.t >/dev/null 2>&1
+	-(time t/stress_test_2.t 2>&1) | grep 'real'
 
 both:
 	(make threaded && $(cmd) && make single && $(cmd))
