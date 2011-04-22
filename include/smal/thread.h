@@ -17,6 +17,16 @@
 #endif
 
 #include <setjmp.h>
+#if defined(__APPLE__)
+/* OS X annoyance: http://duriansoftware.com/joe/PSA:-avoiding-the-%22ucontext-routines-are-deprecated%22-error-on-Mac-OS-X-Snow-Leopard.html */
+#include <sys/ucontext.h>
+int  getcontext(ucontext_t *);
+void makecontext(ucontext_t *, void (*)(), int, ...);
+int  setcontext(const ucontext_t *);
+int  swapcontext(ucontext_t * __restrict, const ucontext_t * __restrict);
+#else
+#include <ucontext.h>
+#endif
 
 #if SMAL_PTHREAD
 #include <pthread.h>
@@ -42,7 +52,10 @@ typedef struct smal_thread {
   void *roots;
   void *bottom_of_stack;
   void *top_of_stack;
-  struct { jmp_buf _jb; } registers;
+  struct { 
+    jmp_buf _jb;
+    ucontext_t _ucontext;
+  } registers;
   void *user_data[4];
 } smal_thread;
 
