@@ -33,20 +33,31 @@ It does, however, optionally support:
 
 <code>smal_type</code> represents a user-data type of a fixed size, mark and free callbacks.
 
-<code>smal_buffer</code> represents a <code>mmap()</code> region of <code>smal_page_size</code> aligned to <code>smal_page_size</code>.
-Each <code>smal_buffer</code> is at the head of an <code>mmap()</code> region.
+<code>smal_page</code> represents an <code>mmap()</code> region of <code>smal_page_size</code> aligned to <code>smal_page_size</code>.
+
+<code>smal_buffer</code> represents the state of objects in a <code>smal_page</code>.  It handles parcelling and bookkeeping for all objects allocated from its <code>smal_page</code>.
 
 == Types ==
 
 <code>smal_type</code> defines the size of objects and other characteristics that will be allocated from one or more <code>smal_buffer</code>s.
 <code>mark_func</code> and <code>free_func</code> callback can be registered for each <code>smal_type</code>.
 
-== Buffer Allocation ==
+== Page Allocation ==
 
-Each <code>smal_buffer</code> and its object allocation region are allocated from the OS via <code>mmap()</code> and is ensured to be aligned to <code>smal_page_size</code>.
+Each <code>smal_page</code> is allocated from the OS via <code>mmap()</code> and is ensured to be aligned to <code>smal_page_size</code>.
 The reasons for this aggressive alignment are discussed below.
 This is achieved by attempting to allocate <code>smal_page_size</code> bytes using <code>MAP_ANON</code> <code>mmap()</code>.  
 If this buffer not aligned, SMAL <code>munmap()</code>s the attempted buffer and <code>mmap()</code>s <code>smal_page_size * 2</code> bytes and subsequently <code>munmap()</code>s the unaligned portion. 
+
+== Buffer Allocation ==
+
+SMAL support two <code>smal_buffer</code> allocation options: 
+
+* Use a portion at the head each page for the page's <code>smal_buffer</code> structure.
+* Allocate a <code>smal_buffer</code> structure using <code>malloc()</code> and store a pointer to it in the first word of the page.
+
+The former has better performance, since mapping between <code>smal_page*</code> and <code>smal_buffer*</code>, but bookeeping operations will dirty memory during allocation and collection.  This can cause unnessary copy-on-write effort in forked processes.
+The latter avoids page mutations during allocation and collections but has an addtional pointer dereference when mapping <code>smal_page*<code> pointers to <code>smal_buffer*<code> pointers.
 
 == Object Allocation ==
 
@@ -80,9 +91,9 @@ suitable for conservative and non-conservative collection.
 === Invariants ===
 
 Every potential pointer maps to a unique <code>page_id</code>, computed
-by dividing a <code>smal_buffer*</code> address by <code>smal_page_size</code>.
+by dividing the pointer address by <code>smal_page_size</code>.
 
-Since the <code>smal_buffer</code> header is always aligned to <code>smal_page_size</code>, 
+Since every <code>mmap()</code>'ed page is always aligned to <code>smal_page_size</code>, 
 it is trivial to map a potential object pointer to a potential <code>smal_buffer*</code> or it's <code>page_id</code>.
 
 A non-colliding hash table mapping <code>page_id</code>s to <code>smal_buffer*</code>s is maintained.
@@ -102,13 +113,12 @@ This operation takes 8 x86 instructions.
 
 === Issues ===
 
-* SMAL cannot service allocations larger than <code>smal_page_size - sizeof(smal_buffer) - object_alignment</code>.
+* SMAL cannot service allocations larger than <code>smal_page_size - sizeof(smal_buffer) - object_alignment</code> or <code>smal_page_size - sizeof(void*) - object_alignement, depending on the configuration.
 * The <code>page_id</code> hash table may become large and sparse when <code>mmap()</code> tends to not allocate <code>smal_buffer</code>s in a mostly-contigious fashion -- other active allocators (e.g.: <code>malloc()</code>) may cause holes in the address space consumed by SMAL.
 
-== Object Mark Bits ==
+== Object Mark/Free Bits ==
 
-Each <code>smal_buffer</code> maintains a mark bitmap indexable by every object parceled from the <code>smal_buffer</code>.
-Each mark bitmap is transient; it is <code>malloc()</code>ed and <code>free()</code>ed, on-demand, during <code>smal_collect()</code>.
+Each <code>smal_buffer</code> maintains a mark bitmap and free bitmap indexable by every object parceled from the <code>smal_buffer</code>.
 
 Placing mark bits in a separate bitmap reduces memory overhead, esp. for <code>fork()</code>ed processes -- this protects
 copy-on-write pages from full mutation due to mark bit manipuations.
@@ -120,19 +130,28 @@ If an object pointer is known to be allocated and aligned, <code>smal_mark_ptr_e
 and mark the bit and recurse into the <code>mark_func</code> in another 7 x86 instructions, for a worst case of 32 x86 instructions.
 The non-exact version takes approx. 39 x86 instrutions in the worst case.
 
+== Object Free Lists ==
+
+Each <code>smal_buffer</code> maintains a free list.  Sweeping unused objects into the free list will cause page mutations.  There will be an option to only use the free bitmap to find free objects for allocation, at the expensive of allocation speed.
+
+== Mark Queues ==
+
+SMAL supports an optional mark queue to avoid C stack recursion in <code>mark_func</code>.  This is slightly slower than C recursion but will not cause stack overflows for threads with small C stacks.  The mark queue uses <code>malloc()/free()</code>.
+  
 == Mark-Sweep ==
 
 The algorithms/data structures are as follows:
 
 === Mark a (potential) object ===
 
-# Map potential object pointer to a potential <code>smal_buffer*</code> using <code>buffer_table</code>.
-# Determine if object pointer within <code>smal_buffer</code> region where object allocations took place.
+# Map a potental object pointer to a potential <code>page_id</code>.
+# Map a potential <code>page_id</code> a potential <code>smal_buffer*</code> using <code>buffer_table</code>.
+# Determine if object pointer within <code>smal_buffer</code>'s <code>smal_page</code> region where object allocations took place.
 # Determine if object pointer has proper alignment to the head of the object allocation.
 # Determine the mark bitmap offset.
 # If object is not already marked, 
 # Mark the object in the bitmap, and
-# Call the <code>smal_type</code>'s <code>mark_func()</code> function.
+# Call the <code>smal_type</code>'s <code>mark_func()</code> function to continue marking other objects.
 
 === Sweep ===
 
@@ -174,15 +193,18 @@ See include/smal/thread.h for more info.
 === Thread Issues ===
 
 The rest of the SMAL allocator is not completely thread-safe, yet.
-SMAL does not yet have portable mechanism to:
+SMAL does not yet have portable mechanisms to:
+
 * discover all stop all threads, 
-* collect their stacks and registers.
+* collect their stacks, roots and registers.
+
+The collection should only need to stop the world during marking and should be able to allow allocation in other threads to continue while sweeping objects, at the expense of allocating additional pages until sweeping is complete.  Alternately, in a "single" thread environment, the sweep phase could be executed in a dedicated thread.  These features are not fully implemented.  
 
 === Thread Performance ===
 
 When enabled with threading support, 
-SMAL attempts to use many smaller mutex regions to avoid long locks or global locks.  
-There is a single allocation lock that is held to allow disabling of allocation of each buffer before collection().
+SMAL attempts to use many smaller mutex and read/write lock regions to avoid long or global locks.  
+There is a single allocation read/write lock that is held to allow disabling of allocation of each buffer before collection starts.
 The multi-thread version is approx. 2 to 3 times slower single-thread version, when running only one thread.
 
 == Object Enumeration ==
