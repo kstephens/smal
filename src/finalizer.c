@@ -49,9 +49,7 @@ static smal_finalized *find_finalized_by_referred(void *ptr)
 {
   void **ptrp, *finalized;
   if ( ! initialized ) initialize();
-  smal_thread_mutex_lock(&referred_table_mutex);
   finalized = (ptrp = voidP_voidP_TableGet(&referred_table, ptr)) ? *ptrp : 0;
-  smal_thread_mutex_unlock(&referred_table_mutex);
   return finalized;
 }
 
@@ -62,31 +60,33 @@ static void add_finalized(smal_finalized *finalized)
   smal_thread_mutex_unlock(&referred_table_mutex);
 }
 
-static void remove_finalized(smal_finalized *finalized, int with_lock)
+static void remove_finalized(smal_finalized *finalized)
 {
-  if ( with_lock ) smal_thread_mutex_lock(&referred_table_mutex);
+  // referred_table_mutex is held.
   voidP_voidP_TableRemove(&referred_table, finalized->referred);
-  if ( with_lock ) smal_thread_mutex_unlock(&referred_table_mutex);
 }
 
 
 smal_finalizer * smal_finalizer_create(void *ptr, void (*func)(smal_finalizer *finalizer))
 {
-  smal_finalized *finalized;
+  smal_finalized *finalized = 0;
   smal_finalizer *finalizer;
 
+  smal_thread_mutex_lock(&referred_table_mutex);
   if ( ! (finalized = find_finalized_by_referred(ptr)) ) {
-    if ( ! (finalized = malloc(sizeof(*finalized))) )
+    if ( ! (finalized = malloc(sizeof(*finalized))) ) {
+      smal_thread_mutex_unlock(&referred_table_mutex);
       return 0;
+    }
     finalized->referred = ptr;
     finalized->finalizer_list = 0;
     finalized->next = 0;
     smal_thread_mutex_init(&finalized->mutex);
-    smal_thread_mutex_lock(&finalized->mutex);
     add_finalized(finalized);
-  } else {
-    smal_thread_mutex_lock(&finalized->mutex);
   }
+  smal_thread_mutex_unlock(&referred_table_mutex);
+
+  smal_thread_mutex_lock(&finalized->mutex);
 
   if ( ! (finalizer = malloc(sizeof(*finalizer))) ) {
     smal_thread_mutex_unlock(&finalized->mutex);
@@ -111,7 +111,7 @@ void referred_sweeped(smal_finalized *finalized)
   /* Prevent sweep of referred this time around. */
   smal_mark_ptr_exact(finalized->referred);
   /* Forget all finalizers. */
-  remove_finalized(finalized, 0);
+  remove_finalized(finalized);
   /* Add to finalized queue. */
   smal_thread_mutex_lock(&finalized->mutex);
   smal_thread_mutex_lock(&finalized_queue_mutex);

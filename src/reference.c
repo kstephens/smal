@@ -45,26 +45,20 @@ static smal_reference *find_reference_by_referred(void *ptr)
 {
   void **ptrp, *reference;
   if ( ! initialized ) initialize();
-  smal_thread_mutex_lock(&referred_table_mutex);
   reference = (ptrp = voidP_voidP_TableGet(&referred_table, ptr)) ? *ptrp : 0;
-  smal_thread_mutex_unlock(&referred_table_mutex);
   return reference;
 }
 
 static void add_reference(smal_reference *reference)
 {
-  smal_thread_mutex_lock(&referred_table_mutex);
   // Assume reference->mutex is already locked.
   voidP_voidP_TableAdd(&referred_table, reference->referred, reference);
-  smal_thread_mutex_unlock(&referred_table_mutex);
 }
 
-static void remove_reference(smal_reference *reference, int with_lock)
+static void remove_reference(smal_reference *reference)
 {
-  if ( with_lock ) smal_thread_mutex_lock(&referred_table_mutex);
   // Assume reference->mutex is already locked.
   voidP_voidP_TableRemove(&referred_table, reference->referred);
-  if ( with_lock ) smal_thread_mutex_unlock(&referred_table_mutex);
 }
 
 static void reference_type_mark(void *object)
@@ -92,7 +86,10 @@ static void reference_type_free(void *object)
     reference->reference_queue_list = ref_queue_list;
   }  
   smal_thread_mutex_unlock(&reference->mutex);
-  remove_reference(object, 1);
+
+  smal_thread_mutex_lock(&referred_table_mutex);
+  remove_reference(object);
+  smal_thread_mutex_unlock(&referred_table_mutex);
 }
 
 
@@ -101,18 +98,21 @@ smal_reference * smal_reference_create_weak(void *ptr, smal_reference_queue *ref
   int error = 0;
   smal_reference *reference;
 
+  smal_thread_mutex_lock(&referred_table_mutex);
   if ( ! (reference = find_reference_by_referred(ptr)) ) {
-    if ( ! (reference = smal_alloc(reference_type)) )
+    if ( ! (reference = smal_alloc(reference_type)) ) {
+      smal_thread_mutex_unlock(&referred_table_mutex);
       return 0;
+    }
     reference->data = 0;
     reference->referred = ptr;
     reference->reference_queue_list = 0;
     smal_thread_mutex_init(&reference->mutex);
-    smal_thread_mutex_lock(&reference->mutex);
     add_reference(reference);
-  } else {
-    smal_thread_mutex_lock(&reference->mutex);
   }
+  smal_thread_mutex_unlock(&referred_table_mutex);
+
+  smal_thread_mutex_lock(&reference->mutex);
 
   if ( ref_queue ) {
     smal_reference_queue_list *ref_queue_list = malloc(sizeof(*ref_queue_list));
@@ -201,7 +201,7 @@ void referred_sweeped(smal_reference *reference)
 {
   // fprintf(stderr, "    ref %p => %p referred unreachable\n", reference, reference->referred);
   smal_thread_mutex_lock(&reference->mutex);
-  remove_reference(reference, 0);
+  remove_reference(reference);
   reference->referred = 0;
   while ( reference->reference_queue_list ) {
     smal_reference_queue_list *list = reference->reference_queue_list;
