@@ -68,6 +68,7 @@ struct smal_type_descriptor {
   size_t object_alignment;
   smal_mark_func mark_func;
   smal_free_func free_func;
+  int collections_per_sweep;
   void *opaque;
 };
 
@@ -76,10 +77,7 @@ struct smal_type {
   smal_buffer_list buffers;
   smal_thread_rwlock buffers_lock;
   size_t type_id;
-  size_t object_size;
-  size_t object_alignment;
-  smal_mark_func mark_func;
-  smal_free_func free_func;
+  smal_type_descriptor desc;
   smal_buffer *alloc_buffer;
   smal_thread_mutex alloc_buffer_mutex;
   smal_stats stats;
@@ -124,11 +122,15 @@ struct smal_buffer {
 
   void *free_list;
   smal_thread_mutex free_list_mutex;
+
+  int write_protected;
+  int dirty; /* if true, region between begin_ptr and alloc_ptr was written to. */
 };
 
 extern int smal_debug_level;
 
-smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free_func free_func);
+smal_type *smal_type_for_desc(smal_type_descriptor *desc);
+smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free_func free_func); /* deprecated. */
 void smal_type_free(smal_type *type);
 
 void smal_alloc_p(smal_type *type, void **ptrp); /* thread-safe */

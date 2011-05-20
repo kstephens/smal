@@ -250,6 +250,7 @@ static smal_thread_rwlock buffer_table_lock;
 
 static smal_thread_lock _smal_collect_inner_lock;
 
+static size_t collect_id; /* may wrap. */
 static int in_collect; /* protected by alloc_lock */
 static int in_mark;
 static int in_sweep;
@@ -528,7 +529,7 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
 
   smal_thread_lock_init(&self->alloc_disabled);
 
-  if ( smal_buffer_set_object_size(self, type->object_size) >= 0 ) {
+  if ( smal_buffer_set_object_size(self, type->desc.object_size) >= 0 ) {
     smal_buffer_table_add(self);
 
     smal_thread_rwlock_wrlock(&type->buffers_lock);
@@ -578,7 +579,7 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
   self->object_size = smal_buffer_object_size(self);
 
   /* Default alignment to sizeof(double) */
-  self->object_alignment = self->type->object_alignment;
+  self->object_alignment = self->type->desc.object_alignment;
   if ( ! self->object_alignment )
     self->object_alignment = sizeof(double);
 
@@ -754,7 +755,7 @@ void _smal_buffer_mark_ptr(smal_buffer *buf, void *ptr)
     smal_buffer_mark(buf, ptr);
     // smal_thread_rwlock_unlock(&buf->mark_bits_lock);
     // fprintf(stderr, "M");
-    buf->type->mark_func(ptr);
+    buf->type->desc.mark_func(ptr);
     return;
   }
   // smal_thread_rwlock_unlock(&buf->mark_bits_lock);
@@ -959,7 +960,7 @@ void smal_buffer_free_object(smal_buffer *self, void *ptr)
   // smal_thread_mutex_unlock(&self->free_bits_mutex);
 
   // Should we unlock free_bits and free_list?
-  self->type->free_func(ptr);
+  self->type->desc.free_func(ptr);
 
   // smal_thread_mutex_lock(&self->free_list_mutex);
   * ((void**) ptr) = self->free_list;
@@ -1010,6 +1011,9 @@ void smal_buffer_sweep(smal_buffer *self)
   void **free_ptrs_p = free_ptrs;
 #endif
 
+  /* Sweep this time? */
+  if ( collect_id % self->type->desc.collections_per_sweep == 0 ) {
+
   // fprintf(stderr, "  s_b_s(b@%p)\n", self);
 
   // smal_thread_rwlock_wrlock(&self->mark_bits_lock);
@@ -1050,6 +1054,10 @@ void smal_buffer_sweep(smal_buffer *self)
   smal_UPDATE_STATS(live_n, += live_n);
   smal_LOCK_STATS(unlock);
    
+  } else {
+    live_n = self->stats.live_before_sweep_n;
+  }
+
   /* Does buffer have live objects? */
   if ( live_n ) {
     /* Buffer can possibly be allocated from. */
@@ -1081,6 +1089,7 @@ void _smal_collect_inner()
   smal_thread_rwlock_wrlock(&alloc_lock);
 
   ++ in_collect;
+  ++ collect_id;
 
   /* Prevent invalidating page_id min, max. */
   smal_thread_lock_lock(&page_id_min_max_keep);
@@ -1157,32 +1166,31 @@ void _smal_collect_inner()
 /**********************************************/
 
 
-smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free_func free_func)
+smal_type *smal_type_for_desc(smal_type_descriptor *desc)
 {
   smal_type *self;
-  size_t object_alignment = 0;
 
   if ( ! initialized ) initialize();
 
   /* must be big enough for free list next pointer. */
-  if ( object_size < sizeof(void*) )
-    object_size = sizeof(void*);
+  if ( desc->object_size < sizeof(void*) )
+    desc->object_size = sizeof(void*);
   /* Align size to at least sizeof(double) */
-  smal_ALIGN(object_size, sizeof(double));
+  smal_ALIGN(desc->object_size, sizeof(double));
 
-  if ( ! object_alignment )
-    object_alignment = sizeof(double);
+  if ( ! desc->object_alignment )
+    desc->object_alignment = sizeof(double);
 
-  if ( ! mark_func )
-    mark_func = null_func;
-  if ( ! free_func )
-    free_func = null_func;
+  if ( ! desc->mark_func )
+    desc->mark_func = null_func;
+  if ( ! desc->free_func )
+    desc->free_func = null_func;
+  if ( ! desc->collections_per_sweep )
+    desc->collections_per_sweep = 1; /* sweep on every collection. */
 
   smal_thread_mutex_lock(&type_head_mutex);
   smal_dllist_each(&type_head, self); {
-    if ( self->object_size == object_size && 
-	 self->mark_func == mark_func &&
-	 self->free_func == free_func ) {
+    if ( ! memcmp(&self->desc, desc, sizeof(*desc)) ) {
       smal_thread_mutex_unlock(&type_head_mutex);
       return self;
     }
@@ -1192,10 +1200,7 @@ smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free
   self = malloc(sizeof(*self));
   memset(self, 0, sizeof(*self));
   self->type_id = ++ type_head.type_id;
-  self->object_size = object_size;
-  self->object_alignment = object_alignment;
-  self->mark_func = mark_func;
-  self->free_func = free_func;
+  self->desc = *desc;
   smal_dllist_init(&self->buffers);
 
   smal_thread_mutex_init(&self->stats._mutex);
@@ -1208,6 +1213,16 @@ smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free
   smal_thread_mutex_unlock(&type_head_mutex);
 
   return self;
+}
+
+smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free_func free_func)
+{
+  smal_type_descriptor desc;
+  memset(&desc, 0, sizeof(desc));
+  desc.object_size = object_size;
+  desc.mark_func = mark_func;
+  desc.free_func = free_func;
+  return smal_type_for_desc(&desc);
 }
 
 void smal_type_free(smal_type *self)
