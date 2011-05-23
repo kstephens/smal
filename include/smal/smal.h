@@ -124,7 +124,9 @@ struct smal_buffer {
   smal_thread_mutex free_list_mutex;
 
   int write_protected;
-  int dirty; /* if true, region between begin_ptr and alloc_ptr was written to. */
+  void  *write_protect_addr;
+  size_t write_protect_size;
+  int dirty; /* if true, region between write_protect_addr and write_protect_addr + write_protect_sie was written to. */
 };
 
 extern int smal_debug_level;

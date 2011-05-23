@@ -1,4 +1,6 @@
 /*
+Modified from http://www.brianweb.net/misc/mach_exceptions_demo.c
+
 Copyright (c) 2003, Brian Alliet. All rights reserved. 
 
 Redistribution and use in source and binary forms, with or without
@@ -42,9 +44,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define DIE(x) do { fprintf(stderr,"%s failed at %d\n",x,__LINE__); exit(1); } while(0)
 #define ABORT(x) do { fprintf(stderr,"%s at %d\n",x,__LINE__); } while(0)
 
+#ifndef my_handle_exn
 /* this is not specific to mach exception handling, its just here to separate required mach code from YOUR code */
 static int my_handle_exn(char *addr, integer_t code);
-
+#endif
 
 /* These are not defined in any header, although they are documented */
 extern boolean_t exc_server(mach_msg_header_t *,mach_msg_header_t *);
@@ -243,8 +246,22 @@ catch_exception_raise(
     thread_state_flavor_t flavor = PPC_EXCEPTION_STATE;
     mach_msg_type_number_t exc_state_count = PPC_EXCEPTION_STATE_COUNT;
     ppc_exception_state_t exc_state;
-#else
-#	error FIXME for non-ppc darwin
+#define exc_state_addr exc_state.dar
+#endif
+#ifdef __x86_64__ 
+    thread_state_flavor_t flavor = x86_EXCEPTION_STATE;
+    mach_msg_type_number_t exc_state_count = x86_EXCEPTION_STATE_COUNT;
+    x86_exception_state_t exc_state;
+#define exc_state_addr exc_state.ues.es64.__faultvaddr
+#endif
+#ifdef __x86__
+    thread_state_flavor_t flavor = x86_EXCEPTION_STATE;
+    mach_msg_type_number_t exc_state_count = x86_EXCEPTION_STATE_COUNT;
+    x86_exception_state_t exc_state;
+#define exc_state_addr exc_state.ues.es32.__faultvaddr
+#endif
+#ifndef exc_state_addr
+#	error Unknown Mach architecture
 #endif
 
     
@@ -263,8 +280,9 @@ catch_exception_raise(
     if(r != KERN_SUCCESS) DIE("thread_get_state");
     
     /* This is the address that caused the fault */
-    addr = (char*) exc_state.dar;
-    
+    addr = (char*) exc_state_addr;
+#undef exc_state_addr
+
     /* you could just as easily put your code in here, I'm just doing this to 
        point out the required code */
     if(!my_handle_exn(addr, code[0])) return FWD();
@@ -292,6 +310,7 @@ kern_return_t catch_exception_raise_state_identity(
     return(KERN_INVALID_ARGUMENT);
 }
 
+#ifndef my_handle_exn
 static char *data;
 
 static int my_handle_exn(char *addr, integer_t code) {
@@ -319,7 +338,9 @@ static int my_handle_exn(char *addr, integer_t code) {
     fprintf(stderr,"Got unknown code %d at %p\n",(int)code,addr);
     return 0;
 }
+#endif
 
+#ifdef SMAL_LAB_TEST
 int main(int argc, char *argv[]) {
     /* fire up the exception thread */
     exn_init();
@@ -339,3 +360,4 @@ int main(int argc, char *argv[]) {
     printf("%d",*((int*)0));
     return 0;
 }
+#endif
