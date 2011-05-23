@@ -717,6 +717,8 @@ void smal_buffer_free(smal_buffer *self)
   smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) addr, (unsigned long) size, (int) result);
 }
 
+#include "write_barrier.h"
+
 /************************************************************************************
  * Mark bits
  */
@@ -1485,6 +1487,8 @@ static void _initialize()
   buffer_table_size = 1;
   buffer_table =   malloc(sizeof(buffer_table[0]) * buffer_table_size);
   memset(buffer_table, 0, sizeof(buffer_table[0]) * buffer_table_size);
+
+  smal_write_barrier_init();
 
   initialized = 1;
 

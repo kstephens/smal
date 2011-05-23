@@ -1,5 +1,6 @@
 #ifdef __APPLE__
-#define exc_init smal_write_barrier_init_os
+#define exn_init smal_write_barrier_init_os
+static void exn_init();
 #define my_handle_exn smal_write_barrier_mutation
 #endif
 
@@ -20,7 +21,7 @@ void smal_buffer_write_protect(smal_buffer *self)
   size_t size = self->alloc_ptr - addr;
 #endif
   if ( self->write_protected && 
-       self->write_protected_addr == addr &&
+       self->write_protect_addr == addr &&
        self->write_protect_size == size )
     return;
   result = mprotect(addr, size, PROT_READ);
@@ -54,7 +55,9 @@ int smal_write_barrier_mutation(void *addr, int code)
   if ( buf ) {
     buf->dirty = 1;
     smal_buffer_write_unprotect(buf);
+    return 1; /* OK */
   }
+  return 0; /* NOT OK */
 }
 
 #ifdef __APPLE__
