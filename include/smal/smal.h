@@ -123,10 +123,15 @@ struct smal_buffer {
   void *free_list;
   smal_thread_mutex free_list_mutex;
 
-  int write_protected;
-  void  *write_protect_addr;
-  size_t write_protect_size;
-  int dirty; /* if true, region between write_protect_addr and write_protect_addr + write_protect_sie was written to. */
+  /** if true, region between write_protect_addr and write_protect_addr + write_protect_size is protected against writes. */
+  smal_thread_rwlock write_protect_lock;
+  int write_protect;
+  void  *write_protect_addr; /** The protected region. */
+  size_t write_protect_size; /** The protected region. */
+
+  smal_thread_rwlock dirty_lock;
+  int dirty_write_barrier; /** If true, use write barrier flag dirty if write protect region is modified. */
+  int dirty; /* If true, elements within smal_buffer allocation space were mutated. */
 };
 
 extern int smal_debug_level;

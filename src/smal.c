@@ -59,6 +59,14 @@ size_t smal_page_mask = smal_page_size_default - 1;
 #define smal_buffer_object_alignment(buf) (buf)->object_alignment
 #endif
 
+#ifndef SMAL_WRITE_BARRIER
+#define SMAL_WRITE_BARRIER 1
+#endif
+
+#if SMAL_WRITE_BARRIER && defined(__APPLE__)
+#define SMAL_SEGREGATE_BUFFER_FROM_PAGE 1
+#endif
+
 /*********************************************************************
  * addr -> page mapping.
  */
@@ -529,6 +537,11 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
 
   smal_thread_lock_init(&self->alloc_disabled);
 
+#if SMAL_WRITE_BARRIER
+  smal_thread_rwlock_init(&self->write_protect_lock);
+  smal_thread_rwlock_init(&self->dirty_lock);
+#endif
+
   if ( smal_buffer_set_object_size(self, type->desc.object_size) >= 0 ) {
     smal_buffer_table_add(self);
 
@@ -707,6 +720,11 @@ void smal_buffer_free(smal_buffer *self)
 
   smal_thread_lock_destroy(&self->alloc_disabled);
 
+#if SMAL_WRITE_BARRIER
+  smal_thread_rwlock_destroy(&self->write_protect_lock);
+  smal_thread_rwlock_destroy(&self->dirty_lock);
+#endif
+
   // fprintf(stderr, "b");
 
 #if SMAL_SEGREGATE_BUFFER_FROM_PAGE
@@ -717,7 +735,9 @@ void smal_buffer_free(smal_buffer *self)
   smal_debug(2, " munmap(%p,0x%lx) = %d", (void*) addr, (unsigned long) size, (int) result);
 }
 
+#if SMAL_WRITE_BARRIER
 #include "write_barrier.h"
+#endif
 
 /************************************************************************************
  * Mark bits
@@ -909,6 +929,12 @@ void *smal_buffer_alloc_object(smal_buffer *self)
     }
     smal_thread_mutex_unlock(&self->alloc_ptr_mutex);
   }
+
+#if SMAL_WRITE_BARRIER
+  /* Assume buffer is dirty because we are allocating from it. */
+  if ( ptr )
+    smal_buffer_reprotect_dirty(self); 
+#endif
 
   smal_LOCK_STATS(lock);
   if ( ptr ) {
@@ -1488,7 +1514,9 @@ static void _initialize()
   buffer_table =   malloc(sizeof(buffer_table[0]) * buffer_table_size);
   memset(buffer_table, 0, sizeof(buffer_table[0]) * buffer_table_size);
 
+#if SMAL_WRITE_BARRIER
   smal_write_barrier_init();
+#endif
 
   initialized = 1;
 
