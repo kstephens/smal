@@ -123,9 +123,8 @@ struct smal_buffer {
   void *free_list;
   smal_thread_mutex free_list_mutex;
 
-  /** if true, region between write_protect_addr and write_protect_addr + write_protect_size is protected against writes. */
   smal_thread_rwlock write_protect_lock;
-  int write_protect;
+  int write_protect;   /** if true, region between write_protect_addr and write_protect_addr + write_protect_size is protected against writes. */
   void  *write_protect_addr; /** The protected region. */
   size_t write_protect_size; /** The protected region. */
 
@@ -177,6 +176,84 @@ void smal_collect_mark_roots();
 int smal_object_reachableQ(void *ptr);
 
 void smal_buffer_print_all(smal_buffer *self, const char *action);
+
+/*********************************************************************
+ * Configuration
+ */
+
+#if 0
+#define smal_buffer_object_size(buf) 24
+#define smal_buffer_object_alignment(buf) smal_buffer_object_size(buf)
+#endif
+
+#ifndef smal_page_size_default
+#define smal_page_size_default ((size_t) (4 * 4 * 1024))
+#endif
+
+#define smal_page_size smal_page_size_default
+#define smal_page_mask (smal_page_size - 1)
+
+#ifndef smal_buffer_object_size
+#define smal_buffer_object_size(buf) (buf)->object_size
+#endif
+
+#ifndef smal_buffer_object_alignment
+#define smal_buffer_object_alignment(buf) (buf)->object_alignment
+#endif
+
+#ifndef SMAL_WRITE_BARRIER
+#define SMAL_WRITE_BARRIER 1
+#endif
+
+#if SMAL_WRITE_BARRIER && defined(__APPLE__)
+#define SMAL_SEGREGATE_BUFFER_FROM_PAGE 1
+#endif
+
+/*********************************************************************
+ * addr -> page mapping.
+ */
+
+#define smal_addr_page_id(PTR) (((size_t) (PTR)) / smal_page_size)
+#define smal_addr_page_offset(PTR) (((size_t) (PTR)) & smal_page_mask)
+#define smal_addr_page(PTR) ((void*)(((size_t) (PTR)) & ~smal_page_mask))
+
+#ifndef SMAL_SEGREGATE_BUFFER_FROM_PAGE
+#define SMAL_SEGREGATE_BUFFER_FROM_PAGE 0
+#endif
+
+#if SMAL_SEGREGATE_BUFFER_FROM_PAGE
+
+/* Pointer to small_buffer is stored in first word of mmap region. */
+struct smal_page {
+  smal_buffer *buffer;
+  double objects[0];
+};
+
+#define smal_addr_to_buffer(PTR)		\
+  (*((smal_buffer**)(smal_addr_page(PTR))))
+
+#define smal_buffer_to_page(BUF)		\
+  ((void*) (BUF)->mmap_addr)
+
+#define smal_buffer_page_id(BUF) ((BUF)->page_id) 
+
+#else
+
+/* smal_buffer is stored at head of mmap region. */
+struct smal_page {
+  smal_buffer buffer;
+  double objects[0];
+};
+
+#define smal_addr_to_buffer(PTR)		\
+  (((smal_buffer*)(smal_addr_page(PTR))))
+
+#define smal_buffer_to_page(BUF)		\
+  ((void*) (BUF))
+
+#define smal_buffer_page_id(BUF) smal_addr_page_id(BUF)
+
+#endif
 
 #endif
 
