@@ -553,7 +553,7 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
   }
 
 #if SMAL_WRITE_BARRIER
-  if ( self->type->desc.mostly_read_only )
+  if ( self->type->desc.mostly_unchanging )
     self->mutation_write_barrier = 1;
 #endif
 
@@ -730,13 +730,8 @@ void _smal_mark_ptr(void *ptr)
  * Marking
  */
 
-#ifndef SMAL_MARK_QUEUE
-#define SMAL_MARK_QUEUE 0
-#endif
-
 #if SMAL_MARK_QUEUE
-/* Use mark_stack.h */
-#include "mark_stack.h"
+#include "mark_queue.h"
 
 void smal_mark_ptr(void *ptr)
 {
@@ -747,7 +742,7 @@ void smal_mark_ptr(void *ptr)
 
 void smal_mark_bindings(int n, void ***bindings)
 {
-  smal_mark_queue_add(n, (void**) bindings, 1);
+  smal_mark_queue_add(&mark_queue, n, (void**) bindings, 1);
 }
 
 #else
@@ -1090,7 +1085,7 @@ void _smal_collect_inner()
     smal_mark_ptr_range(&thr->registers, &thr->registers + 1);
   }
   smal_collect_mark_roots();
-  smal_mark_queue_mark_all();
+  smal_mark_queue_mark_all(&mark_queue);
   -- in_mark;
 
   smal_collect_after_mark();
@@ -1280,7 +1275,6 @@ void smal_alloc_p(smal_type *self, void **ptrp)
   /* Validate or allocate a smal_buffer. */
   smal_thread_mutex_lock(&self->alloc_buffer_mutex);
   if ( ! (alloc_buffer = smal_type_alloc_buffer(self)) ) {
-    // smal_thread_mutex_unlock(&self->alloc_buffer_mutex);
     goto done;
   }
 
@@ -1293,7 +1287,6 @@ void smal_alloc_p(smal_type *self, void **ptrp)
     
     /* If cannot allocate new smal_buffer, out-of-memory. */
     if ( ! (alloc_buffer = smal_type_alloc_buffer(self)) ) {
-      // smal_thread_mutex_unlock(&self->alloc_buffer_mutex);
       goto done;
     }
     // smal_thread_mutex_unlock(&self->alloc_buffer_mutex);

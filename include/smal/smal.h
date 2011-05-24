@@ -70,7 +70,7 @@ struct smal_type_descriptor {
   smal_mark_func mark_func;
   smal_free_func free_func;
   int collections_per_sweep;
-  int mostly_read_only;
+  int mostly_unchanging;
   void *opaque;
 };
 
@@ -255,6 +255,10 @@ struct smal_page {
 
 #define smal_buffer_page_id(BUF) smal_addr_page_id(BUF)
 
+#endif
+
+#ifndef SMAL_MARK_QUEUE
+#define SMAL_MARK_QUEUE 1
 #endif
 
 #endif

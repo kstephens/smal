@@ -3,7 +3,7 @@
   Copyright (c) 2011 Kurt A. Stephens
 */
 
-/* Optionallly included directly into smal.c */
+/* Optionally included directly into smal.c */
 
 #define smal_mark_queue_SIZE 256
 
@@ -29,9 +29,9 @@ void smal_mark_queue_start()
 }
 
 static inline
-void smal_mark_queue_add(int ptr_n, void **ptrs, int pointers_to_pointersQ)
+void smal_mark_queue_add(smal_mark_queue *self, int ptr_n, void **ptrs, int pointers_to_pointersQ)
 {
-  smal_mark_queue *s = mark_queue.prev;
+  smal_mark_queue *s = self->prev;
 
 #if 0
   if ( ptr_n > 1 ) {
@@ -40,11 +40,11 @@ void smal_mark_queue_add(int ptr_n, void **ptrs, int pointers_to_pointersQ)
 #endif
 
   while ( ptr_n > 0 ) {
-    if ( ! (s != &mark_queue && s->back < s->ptrs + smal_mark_queue_SIZE) ) {
+    if ( ! (s != self && s->back < s->ptrs + smal_mark_queue_SIZE) ) {
       smal_mark_queue *new_s = malloc(sizeof(*new_s));
       new_s->front = new_s->back = new_s->ptrs;
       smal_dllist_init(new_s);
-      smal_dllist_insert_all(mark_queue.prev, new_s);
+      smal_dllist_insert_all(self->prev, new_s);
       // fprintf(stderr, "{");
       s = new_s;
     }
@@ -82,15 +82,15 @@ void smal_mark_queue_add(int ptr_n, void **ptrs, int pointers_to_pointersQ)
 static inline
 void smal_mark_queue_add_one(void *ptr)
 {
-  smal_mark_queue_add(1, &ptr, 0);
+  smal_mark_queue_add(&mark_queue, 1, &ptr, 0);
 }
 
 static inline
-void smal_mark_queue_mark_all()
+void smal_mark_queue_mark_all(smal_mark_queue *self)
 {
   smal_mark_queue *s;
   // fprintf(stderr, "  s_m_s_a() ");
-  while ( (s = mark_queue.next) != &mark_queue ) {
+  while ( (s = self->next) != self ) {
     while ( s->front < s->back ) {
       void *ptr;
       // fprintf(stderr, "M");
