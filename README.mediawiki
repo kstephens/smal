@@ -158,6 +158,18 @@ The algorithms/data structures are as follows:
 # For each <code>smal_buffer</code>:
 # MORE HERE.
 
+== Mostly Unchanging Objects ==
+
+SMAL supports designating a <code>smal_type</code> as containing mostly unchanging objects.  The smal_buffers for these objects are tracked for mutations and can be scanned for pointers less frequently by keeping a remembered set of references pointing outside itself.   NOT FULLY IMPLEMENTED, YET.
+
+== Sweep Frequency ==
+
+Types can be created that will sweep objects only every N collections.  This should only be used for object types that are unlikely to ever become unreferenced during normal collection lifecycles.  This can be use in conjuntion with "Mostly Unchangeing Objects" feature.
+
+== Write Barrier ==
+
+SMAL implements a write barrier to determine if a <code>smal_buffer</code> has been mutated since last collection.  This is used to invalidate remembered sets within a buffer.
+
 == Co-operation and Dependency ==
 
 SMAL relies on <code>MAP_ANON</code> <code>mmap()</code>/<code>munmap()</code> and <code>malloc()</code>/<code>free()</code>, 
