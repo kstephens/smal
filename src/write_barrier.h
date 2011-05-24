@@ -25,7 +25,7 @@ void smal_buffer_write_protect(smal_buffer *self)
 #else
   /* Linux can mprotect() non-page alignments. */
   void *addr = self->begin_ptr;
-  size_t size = self->alloc_ptr - addr;
+  size_t size = self->end_ptr - addr;
 #endif
 
   smal_thread_rwlock_wrlock(&self->write_protect_lock);
