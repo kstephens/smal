@@ -12,7 +12,7 @@ int main(int argc, char **argv)
   int alloc_n = 100;
   my_cons *x = 0, *y = 0;
   my_cons *xp = 0, *yp = 0;
-  smal_type *my_cons_type_read_only;
+  smal_type *my_cons_type_mu; /* mostly_unchanging */
   smal_roots_4(x, y, xp, yp);
   
   my_cons_type = smal_type_for(sizeof(my_cons), my_cons_mark, 0);
@@ -21,8 +21,8 @@ int main(int argc, char **argv)
     memset(&desc, 0, sizeof(desc));
     desc.object_size = sizeof(my_cons);
     desc.mark_func = my_cons_mark;
-    desc.mostly_read_only = 1;
-    my_cons_type_read_only = smal_type_for_desc(&desc);
+    desc.mostly_unchanging = 1;
+    my_cons_type_mu = smal_type_for_desc(&desc);
   }
 
   fprintf(stderr, "allocing for x list\n");
@@ -48,9 +48,9 @@ int main(int argc, char **argv)
     assert(stats.buffer_mutations == 0);
   }
 
-  fprintf(stderr, "allocing for y list (mostly_read_only)\n");
+  fprintf(stderr, "allocing for y list (mostly_unchanging)\n");
   for ( alloc_id = 0; alloc_id < alloc_n; ++ alloc_id ) {
-    my_cons *c = smal_alloc(my_cons_type_read_only);
+    my_cons *c = smal_alloc(my_cons_type_mu);
     c->car = (void*) 2;
     c->cdr = y;
     y = c;
