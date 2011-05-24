@@ -59,6 +59,7 @@ struct smal_stats {
   size_t buffer_n; /* number of buffers active. */
   size_t mmap_size; /* bytes mmap()ed. */
   size_t mmap_total; /* total bytes mmap()ed, may wrap. */
+  size_t dirty_mutations; /* mutations: valid only for buffers with dirty_write_barrier.  */
   smal_thread_mutex _mutex;
 };
 extern const char *smal_stats_names[];
@@ -69,6 +70,7 @@ struct smal_type_descriptor {
   smal_mark_func mark_func;
   smal_free_func free_func;
   int collections_per_sweep;
+  int mostly_read_only;
   void *opaque;
 };
 

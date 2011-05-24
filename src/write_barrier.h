@@ -66,11 +66,21 @@ void smal_buffer_write_unprotect(smal_buffer *self)
 
 int smal_write_barrier_mutation(void *addr, int code)
 {
-  smal_buffer *buf = smal_addr_to_buffer(addr);
-  if ( buf && buf->dirty_write_barrier ) {
-    buf->dirty = 1;
+  smal_buffer *self = smal_addr_to_buffer(addr);
+  if ( self && self->dirty_write_barrier ) {
+    smal_thread_rwlock_rdlock(&self->dirty_lock);
+    if ( ! self->dirty ) {
+      // fprintf(stderr, "\n  dirty @%p in buf @%p [%p, %p)\n", addr, self, self->begin_ptr, self->alloc_ptr); fflush(stderr);
+      smal_thread_rwlock_unlock(&self->dirty_lock);
+      smal_LOCK_STATS(lock);
+      smal_UPDATE_STATS(dirty_mutations, += 1);
+      smal_LOCK_STATS(unlock);
+      smal_thread_rwlock_wrlock(&self->dirty_lock);
+      self->dirty = 1;
+    }
+    smal_thread_rwlock_unlock(&self->dirty_lock);
     /* Allow mutator to continue unabated. */
-    smal_buffer_write_unprotect(buf);
+    smal_buffer_write_unprotect(self);
     return 1; /* OK */
   }
   return 0; /* NOT OK */

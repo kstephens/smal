@@ -52,6 +52,7 @@ const char *smal_stats_names[] = {
   "buffer_n",
   "mmap_size",
   "mmap_total",
+  "dirty_mutations",
   0
 };
 
@@ -357,6 +358,10 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size);
     self->stats.N EXPR;							\
   } while ( 0 )
 
+#ifdef SMAL_WRITE_BARRIER
+void smal_buffer_write_unprotect(smal_buffer *);
+#endif
+
 static
 smal_buffer *smal_buffer_alloc(smal_type *type)
 {
@@ -547,6 +552,11 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
     goto done;
   }
 
+#if SMAL_WRITE_BARRIER
+  if ( self->type->desc.mostly_read_only )
+    self->dirty_write_barrier = 1;
+#endif
+
   smal_LOCK_STATS(lock);
   assert(self->stats.avail_n == 0);
   smal_UPDATE_STATS(capacity_n, += self->object_capacity);
@@ -591,7 +601,6 @@ void smal_buffer_stop_allocations(smal_buffer *self)
   smal_thread_mutex_unlock(&self->type->alloc_buffer_mutex);
 }
 
-
 static 
 void smal_buffer_free(smal_buffer *self)
 {
@@ -600,6 +609,11 @@ void smal_buffer_free(smal_buffer *self)
   size_t size = self->mmap_size;
 
   smal_debug(1, "(%p)", self);
+
+  // Disable write barrier.
+#ifdef SMAL_WRITE_BARRIER
+  smal_buffer_write_unprotect(self);
+#endif
 
   // Remove self from buffer table.
   smal_buffer_table_remove(self);
@@ -801,7 +815,6 @@ void smal_mark_ptr_range(void *ptr, void *ptr_end)
   _smal_mark_ptr_range(ptr, ptr_end);
 }
 
-
 /* Can only be called during collection. */
 int smal_object_reachableQ(void *ptr)
 {
@@ -959,6 +972,11 @@ void smal_buffer_sweep(smal_buffer *self)
   /* Sweep this time? */
   if ( collect_id % self->type->desc.collections_per_sweep == 0 ) {
 
+#if SMAL_WRITE_BARRIER
+    /* Avoid spurious write barrier faults during sweep. */
+    smal_buffer_write_unprotect(self); 
+#endif
+
   // fprintf(stderr, "  s_b_s(b@%p)\n", self);
 
   // smal_thread_rwlock_wrlock(&self->mark_bits_lock);
@@ -1007,6 +1025,11 @@ void smal_buffer_sweep(smal_buffer *self)
   if ( live_n ) {
     /* Buffer can possibly be allocated from. */
     smal_buffer_resume_allocations(self);
+
+#if SMAL_WRITE_BARRIER
+    /* Clear dirty bit and prepare write barrier. */
+    smal_buffer_clear_dirty(self);
+#endif
   } else {
     /* No additional objects should have been allocated. */
     assert(self->alloc_ptr == alloc_ptr);
