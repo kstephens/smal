@@ -54,6 +54,8 @@ $(SRC_LIB) : $(O_FILES)
 	rm -f $@
 	ar -rs $@ $(O_FILES)
 
+$(O_FILES) : $(H_FILES)
+
 t/%.t : t/%.c $(SRC_LIB) $(H_FILES)
 	$(CC) $(CFLAGS:$(CFLAGS_OPT)=) -I./t -DSMAL_UNIT_TEST=1 -DSMAL_DEBUG=1 -o $@ $(@:%.t=%.c) $(SRC_LIB) 
 
