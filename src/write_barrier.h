@@ -15,7 +15,7 @@ void smal_buffer_write_protect(smal_buffer *self)
 #ifdef __APPLE__
   /* Mach cannot mprotect() non-page alignments.
      This also implies SMAL_SEGREGATE_BUFFER_FROM_PAGE or else all locking and accounting 
-     will induce erronous dirty write barrier activity.
+     will induce erronous mutation write barrier activity.
   */
 #if ! SMAL_SEGREGATE_BUFFER_FROM_PAGE
 #error Must enable SMAL_SEGREGATE_BUFFER_FROM_PAGE when using write barrier on __APPLE__ Mach.
@@ -67,18 +67,18 @@ void smal_buffer_write_unprotect(smal_buffer *self)
 int smal_write_barrier_mutation(void *addr, int code)
 {
   smal_buffer *self = smal_addr_to_buffer(addr);
-  if ( self && self->dirty_write_barrier ) {
-    smal_thread_rwlock_rdlock(&self->dirty_lock);
-    if ( ! self->dirty ) {
-      // fprintf(stderr, "\n  dirty @%p in buf @%p [%p, %p)\n", addr, self, self->begin_ptr, self->alloc_ptr); fflush(stderr);
-      smal_thread_rwlock_unlock(&self->dirty_lock);
+  if ( self && self->mutation_write_barrier ) {
+    smal_thread_rwlock_rdlock(&self->mutation_lock);
+    if ( ! self->mutation ) {
+      // fprintf(stderr, "\n  mutation @%p in buf @%p [%p, %p)\n", addr, self, self->begin_ptr, self->alloc_ptr); fflush(stderr);
+      smal_thread_rwlock_unlock(&self->mutation_lock);
       smal_LOCK_STATS(lock);
-      smal_UPDATE_STATS(dirty_mutations, += 1);
+      smal_UPDATE_STATS(buffer_mutations, += 1);
       smal_LOCK_STATS(unlock);
-      smal_thread_rwlock_wrlock(&self->dirty_lock);
-      self->dirty = 1;
+      smal_thread_rwlock_wrlock(&self->mutation_lock);
+      self->mutation = 1;
     }
-    smal_thread_rwlock_unlock(&self->dirty_lock);
+    smal_thread_rwlock_unlock(&self->mutation_lock);
     /* Allow mutator to continue unabated. */
     smal_buffer_write_unprotect(self);
     return 1; /* OK */
@@ -86,21 +86,21 @@ int smal_write_barrier_mutation(void *addr, int code)
   return 0; /* NOT OK */
 }
 
-void smal_buffer_clear_dirty(smal_buffer *self)
+void smal_buffer_clear_mutation(smal_buffer *self)
 {
-  smal_thread_rwlock_wrlock(&self->dirty_lock);
-  self->dirty = 0;
-  smal_thread_rwlock_unlock(&self->dirty_lock);
-  if ( self->dirty_write_barrier ) 
+  smal_thread_rwlock_wrlock(&self->mutation_lock);
+  self->mutation = 0;
+  smal_thread_rwlock_unlock(&self->mutation_lock);
+  if ( self->mutation_write_barrier ) 
     smal_buffer_write_protect(self);
 }
 
-void smal_buffer_reprotect_dirty(smal_buffer *self)
+void smal_buffer_reprotect_mutation(smal_buffer *self)
 {
-  smal_thread_rwlock_wrlock(&self->dirty_lock);
-  self->dirty = 1;
-  smal_thread_rwlock_unlock(&self->dirty_lock);
-  if ( self->dirty_write_barrier ) 
+  smal_thread_rwlock_wrlock(&self->mutation_lock);
+  self->mutation = 1;
+  smal_thread_rwlock_unlock(&self->mutation_lock);
+  if ( self->mutation_write_barrier ) 
     smal_buffer_write_protect(self);
 }
 

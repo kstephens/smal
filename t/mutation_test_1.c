@@ -36,7 +36,7 @@ int main(int argc, char **argv)
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
-    assert(stats.dirty_mutations == 0);
+    assert(stats.buffer_mutations == 0);
   }
 
   fprintf(stderr, "collecting x after list\n");
@@ -45,7 +45,7 @@ int main(int argc, char **argv)
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
-    assert(stats.dirty_mutations == 0);
+    assert(stats.buffer_mutations == 0);
   }
 
   fprintf(stderr, "allocing for y list (mostly_read_only)\n");
@@ -72,7 +72,7 @@ int main(int argc, char **argv)
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
-    assert(stats.dirty_mutations == 1);
+    assert(stats.buffer_mutations == 1);
   }
 
   fprintf(stderr, "collecting after mutating y list\n");
@@ -81,7 +81,7 @@ int main(int argc, char **argv)
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
-    assert(stats.dirty_mutations == 1);
+    assert(stats.buffer_mutations == 1);
   }
 
   fprintf(stderr, "mutating y list, again\n");
@@ -95,7 +95,7 @@ int main(int argc, char **argv)
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
-    assert(stats.dirty_mutations == 2);
+    assert(stats.buffer_mutations == 2);
   }
 
   fprintf(stderr, "collecting after mutating y list, again\n");
@@ -104,7 +104,7 @@ int main(int argc, char **argv)
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
-    assert(stats.dirty_mutations == 2);
+    assert(stats.buffer_mutations == 2);
   }
 
 #if 0
@@ -144,7 +144,7 @@ int main(int argc, char **argv)
     assert(stats.free_id == stats.alloc_id);
     assert(stats.capacity_n == 0);
     assert(stats.buffer_n == 0);
-    assert(stats.dirty_mutations == 2);
+    assert(stats.buffer_mutations == 2);
   }
 
   smal_roots_end();

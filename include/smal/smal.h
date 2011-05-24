@@ -59,7 +59,7 @@ struct smal_stats {
   size_t buffer_n; /* number of buffers active. */
   size_t mmap_size; /* bytes mmap()ed. */
   size_t mmap_total; /* total bytes mmap()ed, may wrap. */
-  size_t dirty_mutations; /* mutations: valid only for buffers with dirty_write_barrier.  */
+  size_t buffer_mutations; /* mutations: valid only for buffers with dirty_write_barrier.  */
   smal_thread_mutex _mutex;
 };
 extern const char *smal_stats_names[];
@@ -130,9 +130,9 @@ struct smal_buffer {
   void  *write_protect_addr; /** The protected region. */
   size_t write_protect_size; /** The protected region. */
 
-  smal_thread_rwlock dirty_lock;
-  int dirty_write_barrier; /** If true, use write barrier flag dirty if write protect region is modified. */
-  int dirty; /* If true, elements within smal_buffer allocation space were mutated. */
+  smal_thread_rwlock mutation_lock;
+  int mutation_write_barrier; /** If true, use write barrier flag mutation if write protect region is modified. */
+  int mutation; /* If true, elements within smal_buffer allocation space were mutated. */
 };
 
 extern int smal_debug_level;

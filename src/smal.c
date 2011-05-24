@@ -52,7 +52,7 @@ const char *smal_stats_names[] = {
   "buffer_n",
   "mmap_size",
   "mmap_total",
-  "dirty_mutations",
+  "buffer_mutations",
   0
 };
 
@@ -466,7 +466,7 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
 
 #if SMAL_WRITE_BARRIER
   smal_thread_rwlock_init(&self->write_protect_lock);
-  smal_thread_rwlock_init(&self->dirty_lock);
+  smal_thread_rwlock_init(&self->mutation_lock);
 #endif
 
   if ( smal_buffer_set_object_size(self, type->desc.object_size) >= 0 ) {
@@ -554,7 +554,7 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
 
 #if SMAL_WRITE_BARRIER
   if ( self->type->desc.mostly_read_only )
-    self->dirty_write_barrier = 1;
+    self->mutation_write_barrier = 1;
 #endif
 
   smal_LOCK_STATS(lock);
@@ -658,7 +658,7 @@ void smal_buffer_free(smal_buffer *self)
 
 #if SMAL_WRITE_BARRIER
   smal_thread_rwlock_destroy(&self->write_protect_lock);
-  smal_thread_rwlock_destroy(&self->dirty_lock);
+  smal_thread_rwlock_destroy(&self->mutation_lock);
 #endif
 
   // fprintf(stderr, "b");
@@ -866,9 +866,9 @@ void *smal_buffer_alloc_object(smal_buffer *self)
   }
 
 #if SMAL_WRITE_BARRIER
-  /* Assume buffer is dirty because we are allocating from it. */
+  /* Assume buffer is mutation because we are allocating from it. */
   if ( ptr )
-    smal_buffer_reprotect_dirty(self); 
+    smal_buffer_reprotect_mutation(self); 
 #endif
 
   smal_LOCK_STATS(lock);
@@ -1027,8 +1027,8 @@ void smal_buffer_sweep(smal_buffer *self)
     smal_buffer_resume_allocations(self);
 
 #if SMAL_WRITE_BARRIER
-    /* Clear dirty bit and prepare write barrier. */
-    smal_buffer_clear_dirty(self);
+    /* Clear mutation bit and prepare write barrier. */
+    smal_buffer_clear_mutation(self);
 #endif
   } else {
     /* No additional objects should have been allocated. */
