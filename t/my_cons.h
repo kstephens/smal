@@ -21,8 +21,8 @@ static smal_type *my_cons_type;
 
 static void my_cons_mark (void *ptr)
 {
-  smal_mark_ptr(((my_cons *) ptr)->car);
-  smal_mark_ptr(((my_cons *) ptr)->cdr);
+  smal_mark_ptr(ptr, ((my_cons *) ptr)->car);
+  smal_mark_ptr(ptr, ((my_cons *) ptr)->cdr);
 }
 
 void my_print_stats()

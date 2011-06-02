@@ -80,8 +80,9 @@ void smal_mark_queue_add(smal_mark_queue *self, int ptr_n, void **ptrs, int poin
 }
 
 static inline
-void smal_mark_queue_add_one(void *ptr)
+void smal_mark_queue_add_one(void *referrer, void *ptr)
 {
+  // FIXME: Handle referrer.
   smal_mark_queue_add(&mark_queue, 1, &ptr, 0);
 }
 
@@ -100,7 +101,7 @@ void smal_mark_queue_mark_all(smal_mark_queue *self)
       ptr = *(s->front ++);
       if ( s->front == s->back ) 
 	s->front = s->back = s->ptrs;
-      _smal_mark_ptr(ptr);
+      _smal_mark_ptr(0, ptr); // FIXME: Handle referrer.
     }
     smal_dllist_delete(s);
     free(s);

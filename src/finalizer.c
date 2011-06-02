@@ -109,7 +109,7 @@ void referred_sweeped(smal_finalized *finalized)
 {
   // fprintf(stderr, "    ref %p => %p referred unreachable\n", finalizer, finalizer->referred);
   /* Prevent sweep of referred this time around. */
-  smal_mark_ptr_exact(finalized->referred);
+  smal_mark_ptr_exact(finalized, finalized->referred);
   /* Forget all finalizers. */
   remove_finalized(finalized);
   /* Add to finalized queue. */

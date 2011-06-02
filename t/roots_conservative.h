@@ -18,6 +18,6 @@ void smal_collect_after_sweep() { }
 void smal_collect_mark_roots()
 {
   smal_thread *thr = smal_thread_self();
-  smal_mark_ptr_range(thr->top_of_stack, thr->bottom_of_stack);
+  smal_mark_ptr_range(0, thr->top_of_stack, thr->bottom_of_stack);
 }
 

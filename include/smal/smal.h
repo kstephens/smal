@@ -10,6 +10,25 @@
 #include "smal/assert.h"
 #include "smal/thread.h"
 
+/* Configuration */
+
+#ifndef SMAL_WRITE_BARRIER
+#define SMAL_WRITE_BARRIER 1
+#endif
+
+#if SMAL_WRITE_BARRIER && defined(__APPLE__)
+#define SMAL_SEGREGATE_BUFFER_FROM_PAGE 1
+#endif
+
+#ifndef SMAL_MARK_QUEUE
+#define SMAL_MARK_QUEUE 1
+#endif
+
+#ifndef SMAL_REMEMBERED_SET
+#define SMAL_REMEMBERED_SET 1
+#endif
+
+
 #define smal_alignedQ(ptr,align) (((size_t)(ptr) % (align)) == 0)
 #define smal_ALIGN(ptr,align) if ( (size_t)(ptr) % (align) ) (ptr) += (align) - ((size_t)(ptr) % (align))
 
@@ -133,6 +152,12 @@ struct smal_buffer {
   smal_thread_rwlock mutation_lock;
   int mutation_write_barrier; /** If true, use write barrier flag mutation if write protect region is modified. */
   int mutation; /* If true, elements within smal_buffer allocation space were mutated. */
+
+#if SMAL_REMEMBERED_SET
+  int use_remembered_set;
+  struct smal_mark_queue *remembered_set;
+  int remembered_set_valid;
+#endif
 };
 
 extern int smal_debug_level;
@@ -149,10 +174,11 @@ void smal_free_p(void **ptrp);
 /* Collection. */
 void smal_collect(); /* thread-safe. */
 
-void smal_mark_ptr(void *ptr); /* user can call this method during smal_collect(): */
-void smal_mark_ptr_p(void **ptrp);
-void smal_mark_ptr_exact(void *ptr); /* assumes ptr is 0 or known to be properly allocated and aligned. */
-void smal_mark_ptr_range(void *ptr, void *ptr_end); /* Assumes arbitrary alignments of pointers within region. */
+/* Users can call these method only during smal_collect(): */
+void smal_mark_ptr(void *referrer, void *ptr); 
+void smal_mark_ptr_p(void *referrer, void **ptrp);
+void smal_mark_ptr_exact(void *referrer, void *ptr); /* assumes ptr is 0 or known to be properly allocated and aligned. */
+void smal_mark_ptr_range(void *referrer, void *ptr, void *ptr_end); /* Assumes arbitrary alignments of pointers within region. */
 void smal_mark_bindings(int n_bindings, void ***bindings);
 
 /* If func() returns < 0; stop iterating, returns < 0 if func() < 0. */
@@ -203,14 +229,6 @@ void smal_buffer_print_all(smal_buffer *self, const char *action);
 #define smal_buffer_object_alignment(buf) (buf)->object_alignment
 #endif
 
-#ifndef SMAL_WRITE_BARRIER
-#define SMAL_WRITE_BARRIER 1
-#endif
-
-#if SMAL_WRITE_BARRIER && defined(__APPLE__)
-#define SMAL_SEGREGATE_BUFFER_FROM_PAGE 1
-#endif
-
 /*********************************************************************
  * addr -> page mapping.
  */
@@ -257,9 +275,6 @@ struct smal_page {
 
 #endif
 
-#ifndef SMAL_MARK_QUEUE
-#define SMAL_MARK_QUEUE 1
-#endif
 
 #endif
 

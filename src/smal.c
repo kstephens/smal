@@ -688,6 +688,9 @@ void smal_buffer_free(smal_buffer *self)
 #define smal_buffer_freeQ(BUF, PTR)				\
   smal_bitmap_setQ(&(BUF)->free_bits, smal_buffer_i(BUF, PTR))
 
+static smal_buffer *mark_referrer_buf;
+static void *mark_referrer_ptr;
+
 static inline
 void _smal_buffer_mark_ptr(smal_buffer *buf, void *ptr)
 {
@@ -708,6 +711,10 @@ void _smal_buffer_mark_ptr(smal_buffer *buf, void *ptr)
     smal_buffer_mark(buf, ptr);
     // smal_thread_rwlock_unlock(&buf->mark_bits_lock);
     // fprintf(stderr, "M");
+#if SMAL_REMEMBERED_SET
+    mark_referrer_buf = buf;
+    mark_referrer_ptr = ptr;
+#endif
     buf->type->desc.mark_func(ptr);
     return;
   }
@@ -715,7 +722,7 @@ void _smal_buffer_mark_ptr(smal_buffer *buf, void *ptr)
 }
 
 static inline
-void _smal_mark_ptr(void *ptr)
+void _smal_mark_ptr(void *referrer, void *ptr)
 {
   smal_buffer *buf;
   if ( (buf = smal_ptr_to_buffer(ptr)) ) {
@@ -733,12 +740,12 @@ void _smal_mark_ptr(void *ptr)
 #if SMAL_MARK_QUEUE
 #include "mark_queue.h"
 
-void smal_mark_ptr(void *ptr)
+void smal_mark_ptr(void *referrer, void *ptr)
 {
-  smal_mark_queue_add_one(ptr);
+  smal_mark_queue_add_one(referrer, ptr);
 }
 
-#define smal_mark_ptr_inner(PTR) smal_mark_ptr(PTR)
+#define smal_mark_ptr_inner(REF,PTR) smal_mark_ptr(REF,PTR)
 
 void smal_mark_bindings(int n, void ***bindings)
 {
@@ -747,13 +754,13 @@ void smal_mark_bindings(int n, void ***bindings)
 
 #else
 
-void smal_mark_ptr(void *ptr)
+void smal_mark_ptr(void *referrer, void *ptr)
 {
-  _smal_mark_ptr(ptr);
+  _smal_mark_ptr(referrer, ptr);
 }
 
 #define smal_mark_queue_start() ((void) 0)
-#define smal_mark_ptr_inner(PTR) _smal_mark_ptr(PTR)
+#define smal_mark_ptr_inner(REF,PTR) _smal_mark_ptr(REF,PTR)
 #define smal_mark_queue_mark_all() ((void) 0)
 
 void smal_mark_bindings(int n, void ***bindings)
@@ -763,13 +770,13 @@ void smal_mark_bindings(int n, void ***bindings)
   for ( i = 0; i < n; ++ i ) {
     void *ptr = * bindings[i];
     /* fprintf(stderr, "  mark %p => %p\n", roots->_bindings[i], ptr); */
-    smal_mark_ptr(ptr);
+    smal_mark_ptr(0, ptr);
   }
 }
 #endif
 
 /* Deprecated. */
-void smal_mark_ptr_exact(void *ptr)
+void smal_mark_ptr_exact(void *referrer, void *ptr)
 {
   smal_buffer *buf;
   if ( ! ptr )
@@ -781,7 +788,7 @@ void smal_mark_ptr_exact(void *ptr)
 }
 
 static inline
-void _smal_mark_ptr_range(void *ptr, void *ptr_end)
+void _smal_mark_ptr_range(void *referrer, void *ptr, void *ptr_end)
 {
   // fprintf(stderr, "   smpr [%p, %p] ALIGNED\n", ptr, ptr_end);
 
@@ -789,13 +796,13 @@ void _smal_mark_ptr_range(void *ptr, void *ptr_end)
     void *p = *(void**) ptr;
     if ( p ) {
       // fprintf(stderr, "     smpr *%p = %p\n", ptr, p);
-      smal_mark_ptr(p);
+      smal_mark_ptr(referrer, p);
     }
     ptr += sizeof(int);
   }
 }
 
-void smal_mark_ptr_range(void *ptr, void *ptr_end)
+void smal_mark_ptr_range(void *referrer, void *ptr, void *ptr_end)
 {
   // fprintf(stderr, "   smpr [%p, %p]\n", ptr, ptr_end);
   if ( ptr_end < ptr ) {
@@ -807,7 +814,7 @@ void smal_mark_ptr_range(void *ptr, void *ptr_end)
   smal_ALIGN(ptr, __alignof__(void*));
   ptr_end -= sizeof(void*) - 1;
 
-  _smal_mark_ptr_range(ptr, ptr_end);
+  _smal_mark_ptr_range(referrer, ptr, ptr_end);
 }
 
 /* Can only be called during collection. */
@@ -951,6 +958,13 @@ void smal_buffer_before_mark(smal_buffer *self)
   smal_thread_mutex_lock(&self->stats._mutex);
   self->stats.live_before_sweep_n = self->stats.live_n;
   smal_thread_mutex_unlock(&self->stats._mutex);
+
+  /* Prepare remembered_set. */
+#if SMAL_REMEMBERED_SET
+  if ( self->mutation ) {
+    self->remembered_set_valid = 0;
+  }
+#endif
 }
 
 static
@@ -1080,11 +1094,23 @@ void _smal_collect_inner()
   // Mark roots.
   ++ in_mark;
   smal_mark_queue_start();
+#if SMAL_REMEMBERED_SET
+  mark_referrer_ptr = 0;
+  mark_referrer_buf = 0;
+#endif
   { 
     smal_thread *thr = smal_thread_self();
-    smal_mark_ptr_range(&thr->registers, &thr->registers + 1);
+    smal_mark_ptr_range(0, &thr->registers, &thr->registers + 1);
   }
   smal_collect_mark_roots();
+#if SMAL_REMEMBERED_SET
+  smal_dllist_each(&buffer_collecting, buf); {
+    if ( buf->remembered_set && buf->remembered_set_valid ) {
+      smal_mark_queue_mark_all(buf->remembered_set);
+    }
+    smal_buffer_before_mark(buf);
+  } smal_dllist_each_end();
+#endif
   smal_mark_queue_mark_all(&mark_queue);
   -- in_mark;
 
