@@ -65,8 +65,11 @@ doc/html/index.html : Makefile $(C_FILES) $(H_FILES) doc/doxygen.conf # doc/*.pn
 	-#cp -p doc/*.png doc/html/
 	doxygen doc/doxygen.conf 2>&1 | tee doc/doxygen.log
 
-clean :
-	rm -rf *.s *.dSYM *.o *.a src/*.o src/*.a t/*.t t/*.dSYM
+doc-clean :
+	rm -rf doc/html/ doc/latex/
+
+clean : doc-clean
+	rm -rf *.s *.dSYM *.o *.a src/*.o src/*.a t/*.t t/*.dSYM 
 
 test : all $(TESTS_T)
 	set -ex ;\
