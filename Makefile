@@ -59,6 +59,12 @@ $(O_FILES) : $(H_FILES)
 t/%.t : t/%.c $(SRC_LIB) $(H_FILES)
 	$(CC) $(CFLAGS:$(CFLAGS_OPT)=) -I./t -DSMAL_UNIT_TEST=1 -DSMAL_DEBUG=1 -o $@ $(@:%.t=%.c) $(SRC_LIB) 
 
+doc/html : doc/html/index.html
+doc/html/index.html : Makefile $(C_FILES) $(H_FILES) doc/doxygen.conf # doc/*.png
+	mkdir -p doc/html
+	-#cp -p doc/*.png doc/html/
+	doxygen doc/doxygen.conf 2>&1 | tee doc/doxygen.log
+
 clean :
 	rm -rf *.s *.dSYM *.o *.a src/*.o src/*.a t/*.t t/*.dSYM
 
