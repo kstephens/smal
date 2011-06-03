@@ -747,9 +747,14 @@ void smal_mark_ptr(void *referrer, void *ptr)
 
 #define smal_mark_ptr_inner(REF,PTR) smal_mark_ptr(REF,PTR)
 
+void smal_mark_ptr_n(void *referrer, int n_ptrs, void **ptrs)
+{
+  smal_mark_queue_add(&mark_queue, referrer, n_ptrs, ptrs, 0);
+}
+
 void smal_mark_bindings(int n, void ***bindings)
 {
-  smal_mark_queue_add(&mark_queue, n, (void**) bindings, 1);
+  smal_mark_queue_add(&mark_queue, 0, n, (void**) bindings, 1);
 }
 
 #else
@@ -757,6 +762,12 @@ void smal_mark_bindings(int n, void ***bindings)
 void smal_mark_ptr(void *referrer, void *ptr)
 {
   _smal_mark_ptr(referrer, ptr);
+}
+
+void smal_mark_ptr_n(void *referrer, int n_ptrs, void **ptrs)
+{
+  while ( n_ptrs -- > 0 )
+    _smal_mark_ptr(referrer, *(ptrs ++));
 }
 
 #define smal_mark_queue_start() ((void) 0)
@@ -770,7 +781,7 @@ void smal_mark_bindings(int n, void ***bindings)
   for ( i = 0; i < n; ++ i ) {
     void *ptr = * bindings[i];
     /* fprintf(stderr, "  mark %p => %p\n", roots->_bindings[i], ptr); */
-    smal_mark_ptr(0, ptr);
+    _smal_mark_ptr(0, ptr);
   }
 }
 #endif

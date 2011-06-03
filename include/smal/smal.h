@@ -163,7 +163,7 @@ struct smal_buffer {
 extern int smal_debug_level;
 
 smal_type *smal_type_for_desc(smal_type_descriptor *desc);
-smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free_func free_func); /** deprecated. */
+smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free_func free_func); /** Deprecated. */
 void smal_type_free(smal_type *type);
 
 void smal_alloc_p(smal_type *type, void **ptrp); /** Thread-safe. */
@@ -177,8 +177,9 @@ void smal_collect(); /* Thread-safe. */
 /** Users can call these method only during smal_collect(): */
 void smal_mark_ptr(void *referrer, void *ptr); 
 void smal_mark_ptr_p(void *referrer, void **ptrp);
-void smal_mark_ptr_exact(void *referrer, void *ptr); /* assumes ptr is 0 or known to be properly allocated and aligned. */
-void smal_mark_ptr_range(void *referrer, void *ptr, void *ptr_end); /* Assumes arbitrary alignments of pointers within region. */
+void smal_mark_ptr_n(void *referrer, int n_ptrs, void **ptrs);
+void smal_mark_ptr_exact(void *referrer, void *ptr); /** Assumes ptr is 0 or known to be properly allocated and aligned. */
+void smal_mark_ptr_range(void *referrer, void *ptr, void *ptr_end); /** Assumes arbitrary alignments of pointers within region. */
 void smal_mark_bindings(int n_bindings, void ***bindings);
 
 /** If func() returns < 0; stop iterating, returns < 0 if func() < 0. */

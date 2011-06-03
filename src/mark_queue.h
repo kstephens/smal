@@ -10,7 +10,7 @@
 typedef struct smal_mark_queue {
   struct smal_mark_queue *next, *prev;
   void **front, **back;
-  void *ptrs[smal_mark_queue_SIZE];
+  void *ptrs[smal_mark_queue_SIZE + 2];
 } smal_mark_queue;
 
 static smal_mark_queue mark_queue = { &mark_queue, &mark_queue };
@@ -29,9 +29,10 @@ void smal_mark_queue_start()
 }
 
 static inline
-void smal_mark_queue_add(smal_mark_queue *self, int ptr_n, void **ptrs, int pointers_to_pointersQ)
+void smal_mark_queue_add(smal_mark_queue *self, void *referrer, int ptr_n, void **ptrs, int pointers_to_pointersQ)
 {
   smal_mark_queue *s = self->prev;
+  void **ptr_n_p = 0;
 
 #if 0
   if ( ptr_n > 1 ) {
@@ -48,6 +49,8 @@ void smal_mark_queue_add(smal_mark_queue *self, int ptr_n, void **ptrs, int poin
       // fprintf(stderr, "{");
       s = new_s;
     }
+    *(s->back ++) = referrer;
+    *(ptr_n_p = s->back ++) = 0;
     if ( pointers_to_pointersQ ) {
       while ( ptr_n > 0 && s->back < s->ptrs + smal_mark_queue_SIZE ) {
 	void **ptr_p = *(ptrs ++);
@@ -55,6 +58,7 @@ void smal_mark_queue_add(smal_mark_queue *self, int ptr_n, void **ptrs, int poin
 	if ( ptr ) {
 	  // fprintf(stderr, "m");
 	  *(s->back ++) = ptr;
+	  ++ *ptr_n_p;
 #if 0
 	  if ( mark_queue_depth_max < ++ mark_queue_depth )
 	    mark_queue_depth_max = mark_queue_depth;
@@ -68,6 +72,7 @@ void smal_mark_queue_add(smal_mark_queue *self, int ptr_n, void **ptrs, int poin
 	if ( ptr ) {
 	  // fprintf(stderr, "m");
 	  *(s->back ++) = ptr;
+	  ++ *ptr_n_p;
 #if 0
 	  if ( mark_queue_depth_max < ++ mark_queue_depth )
 	    mark_queue_depth_max = mark_queue_depth;
@@ -82,8 +87,7 @@ void smal_mark_queue_add(smal_mark_queue *self, int ptr_n, void **ptrs, int poin
 static inline
 void smal_mark_queue_add_one(void *referrer, void *ptr)
 {
-  // FIXME: Handle referrer.
-  smal_mark_queue_add(&mark_queue, 1, &ptr, 0);
+  smal_mark_queue_add(&mark_queue, referrer, 1, &ptr, 0);
 }
 
 static inline
@@ -93,6 +97,9 @@ void smal_mark_queue_mark_all(smal_mark_queue *self)
   // fprintf(stderr, "  s_m_s_a() ");
   while ( (s = self->next) != self ) {
     while ( s->front < s->back ) {
+      void *referrer = *(s->front ++);
+      int n_ptrs = (size_t) *(s->front ++);
+      while ( n_ptrs -- > 0 ) {
       void *ptr;
       // fprintf(stderr, "M");
 #if 0
@@ -101,7 +108,8 @@ void smal_mark_queue_mark_all(smal_mark_queue *self)
       ptr = *(s->front ++);
       if ( s->front == s->back ) 
 	s->front = s->back = s->ptrs;
-      _smal_mark_ptr(0, ptr); // FIXME: Handle referrer.
+      _smal_mark_ptr(referrer, ptr);
+    }
     }
     smal_dllist_delete(s);
     free(s);
