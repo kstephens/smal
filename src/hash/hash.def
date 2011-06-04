@@ -187,6 +187,9 @@ HASH_EXTERN size_t HASH(TableCollisions) ( HASH(Table) *ht );
 HASH_EXTERN void HASH(TableResize) ( HASH(Table) *ht, int capacity );
 /* Resize the table */
 
+HASH_EXTERN void HASH(TableClear) ( HASH(Table) *ht );
+/* Clear the table, but does not change capacity. */
+
 HASH_EXTERN void HASH(TableDestroy) ( HASH(Table) *ht );
 /* Destroy the table */
 

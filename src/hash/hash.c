@@ -309,7 +309,8 @@ HASH_EXTERN void HASH(TableResize) ( HASH(Table) *ht, int capacity )
 #endif
 }
 
-HASH_EXTERN void HASH(TableDestroy) ( HASH(Table) *ht )
+
+HASH_EXTERN void HASH(TableClear) ( HASH(Table) *ht )
 {
   unsigned int i;
 
@@ -336,20 +337,26 @@ HASH_EXTERN void HASH(TableDestroy) ( HASH(Table) *ht )
     }
   }
 
-  /* Delete the table */
-#if HASH_TABLE_FIXED_SIZE
-  HASH_FREE((void*) ht->_entries);
-  ht->_entries = 0;
-  HASH_WRITE_BARRIER(ht);
-  ht->_entriesLen = 0;
-#endif
-
 #if HASH_TABLE_NENTRIES != 0
   ht->_nentries = 0;
 #endif
 
 #if HASH_TABLE_COLLISIONS != 0
   ht->_collisions = 0;
+#endif
+
+}
+
+HASH_EXTERN void HASH(TableDestroy) ( HASH(Table) *ht )
+{
+  HASH(TableClear)(ht);
+
+  /* Delete the table */
+#if HASH_TABLE_FIXED_SIZE == 0
+  HASH_FREE((void*) ht->_entries);
+  ht->_entries = 0;
+  HASH_WRITE_BARRIER(ht);
+  ht->_entriesLen = 0;
 #endif
 
 #ifdef HASH_TABLE_DESTROY
