@@ -69,7 +69,7 @@ static void reference_type_mark(void *object)
   smal_thread_mutex_lock(&reference->mutex);
   ref_queue_list = reference->reference_queue_list;
   while ( ref_queue_list ) {
-    smal_mark_ptr_exact(reference, ref_queue_list->reference_queue);
+    smal_mark_ptr(reference, ref_queue_list->reference_queue);
     ref_queue_list = ref_queue_list->next;
   }
   smal_thread_mutex_unlock(&reference->mutex);
@@ -148,7 +148,7 @@ static void ref_queue_mark(void *ptr)
   list = ref_queue->reference_list;
   while ( list ) {
     // fprintf(stderr, "ref_queue %p marking %p\n", ref_queue, list->reference);
-    smal_mark_ptr_exact(ref_queue, list->reference);
+    smal_mark_ptr(ref_queue, list->reference);
     list = list->next;
   }
   smal_thread_mutex_unlock(&ref_queue->mutex);
