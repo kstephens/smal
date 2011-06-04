@@ -37,7 +37,7 @@ CFLAGS_SMAL_OPTIONS = $(CFLAGS_DEBUG) $(CFLAGS_ASSERT) $(CFLAGS_THREAD) $(CFLAGS
 CFLAGS = $(CFLAGS_OPT) $(CFLAGS_PROF) -g -Wall -Werror $(CFLAGS_SMAL_OPTIONS) -I$(INC_DIR) -Isrc #
 
 H_FILES := $(shell echo $(INC_DIR)/smal/*.h src/*.h) #
-C_FILES := $(shell echo src/*.c) src/hash/voidP_voidP_Table.c #
+C_FILES := $(shell echo src/*.c) src/hash/voidP_voidP_Table.c src/hash/voidP_Table.c #
 O_FILES := $(C_FILES:%.c=%.o) #
 TESTS_C := $(shell echo t/*.c) #
 TESTS_T := $(TESTS_C:%.c=%.t) #

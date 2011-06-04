@@ -1,0 +1,4 @@
+#define HASH(X)voidP_##X
+#define HASH_KEY void*
+#define HASH_KEY_HASH(X) voidP_hash(X)
+#undef  HASH_DATA
