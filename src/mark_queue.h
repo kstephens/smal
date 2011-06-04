@@ -32,7 +32,7 @@ static inline
 void smal_mark_queue_add(smal_mark_queue *self, void *referrer, int ptr_n, void **ptrs, int pointers_to_pointersQ)
 {
   smal_mark_queue *s = self->prev;
-  void **ptr_n_p = 0;
+  void **ptr_n_p;
 
 #if 0
   if ( ptr_n > 1 ) {
@@ -117,5 +117,25 @@ void smal_mark_queue_mark_all(smal_mark_queue *self)
   }
   // fprintf(stderr, " DONE (%lu max depth)\n", (unsigned long) mark_queue_depth_max);
   assert(mark_queue_depth == 0);
+}
+
+static inline
+void smal_mark_queue_clear(smal_mark_queue *self)
+{
+  smal_mark_queue *s = self;
+  // fprintf(stderr, "  s_m_s_a() ");
+  while ( (s = s->next) != self )
+    s->front = s->back = s->ptrs;
+  s->front = s->back = s->ptrs;
+}
+
+static inline
+void smal_mark_queue_free(smal_mark_queue *self)
+{
+  smal_mark_queue *s = self;
+  // fprintf(stderr, "  s_m_s_a() ");
+  while ( (s = s->next) != self )
+    free(s);
+  free(s);
 }
 
