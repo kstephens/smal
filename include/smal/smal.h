@@ -155,7 +155,8 @@ struct smal_buffer {
 
 #if SMAL_REMEMBERED_SET
   int use_remembered_set;
-  struct smal_mark_queue *remembered_set;
+  int record_remembered_set;
+  struct smal_remembered_set *remembered_set;
   int remembered_set_valid;
 #endif
 };
@@ -174,12 +175,14 @@ void smal_free_p(void **ptrp); /** Thread-safe. */
 /** Start a collection. */
 void smal_collect(); /* Thread-safe. */
 
+/* Mark pointers. */
 /** Users can call these method only during smal_collect(): */
 void smal_mark_ptr(void *referrer, void *ptr); 
 void smal_mark_ptr_p(void *referrer, void **ptrp);
 void smal_mark_ptr_n(void *referrer, int n_ptrs, void **ptrs);
-void smal_mark_ptr_exact(void *referrer, void *ptr); /** Assumes ptr is 0 or known to be properly allocated and aligned. */
-void smal_mark_ptr_range(void *referrer, void *ptr, void *ptr_end); /** Assumes arbitrary alignments of pointers within region. */
+
+/** Mark groups of possible pointers. */
+void smal_mark_ptr_range(void *referrer, void *ptr, void *ptr_end); /** Assumes arbitrary alignments of possible pointers within region. */
 void smal_mark_bindings(int n_bindings, void ***bindings);
 
 /** If func() returns < 0; stop iterating, returns < 0 if func() < 0. */
@@ -203,7 +206,7 @@ void smal_collect_mark_roots();
 
 /* Low-level/extension functions */
 int smal_object_reachableQ(void *ptr);
-
+smal_buffer *smal_buffer_from_ptr(void *ptr);
 void smal_buffer_print_all(smal_buffer *self, const char *action);
 
 /*********************************************************************
