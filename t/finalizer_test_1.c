@@ -11,7 +11,10 @@
 
 void smal_collect_before_inner(void *tos) { }
 void smal_collect_before_mark() { }
-void smal_collect_after_mark() { }
+void smal_collect_after_mark()
+{
+  smal_finalizer_after_mark(); 
+}
 void smal_collect_before_sweep() 
 {
   smal_finalizer_before_sweep();
@@ -37,6 +40,8 @@ void my_cons_finalizer(smal_finalizer *finalizer)
   finalizer_calls ++;
 }
 
+extern int _smal_debug_mark;
+
 int main(int argc, char **argv)
 {
   my_cons *x = 0, *y = 0;
@@ -45,7 +50,9 @@ int main(int argc, char **argv)
 
   my_cons_type = smal_type_for(sizeof(my_cons), my_cons_mark, 0);
   x = smal_alloc(my_cons_type);
+  fprintf(stderr, "  x = %p\n", x);
   y = smal_alloc(my_cons_type);
+  fprintf(stderr, "  y = %p\n", y);
 
   fin = smal_finalizer_create(y, my_cons_finalizer);
   assert(fin->referred == (void*) y);
@@ -55,6 +62,7 @@ int main(int argc, char **argv)
   y->car = (my_oop) 2;
   y->cdr = (my_oop) 0;
 
+  // _smal_debug_mark = 1;
   smal_collect();
   assert(finalizer_calls == 0);
   {
@@ -68,6 +76,8 @@ int main(int argc, char **argv)
   // assert finalizer was called.
   expected_finalized_reference = y;
   y = 0;
+  // _smal_debug_mark = 1;
+  fprintf(stderr, "  finalized_reference = %p\n", expected_finalized_reference);
   smal_collect();
   assert(finalizer_calls == 1);
   {
