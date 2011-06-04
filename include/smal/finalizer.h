@@ -18,6 +18,7 @@ struct smal_finalizer {
 smal_finalizer * smal_finalizer_create(void *referred, void (*func)(smal_finalizer *finalizer));
 void smal_finalizer_remove(smal_finalizer *finalizer);
 
+void smal_finalizer_after_mark(); /* Call from smal_collect_after_mark() */
 void smal_finalizer_before_sweep(); /* Call from smal_collect_before_sweep() */
 void smal_finalizer_after_sweep(); /* Call from smal_collect_after_sweep() */
 

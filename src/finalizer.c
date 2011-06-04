@@ -107,9 +107,9 @@ smal_finalizer * smal_finalizer_create(void *ptr, void (*func)(smal_finalizer *f
 static
 void referred_sweeped(smal_finalized *finalized)
 {
-  // fprintf(stderr, "    ref %p => %p referred unreachable\n", finalizer, finalizer->referred);
+  fprintf(stderr, "    ref %p => %p referred unreachable\n", finalized, finalized->referred);
   /* Prevent sweep of referred this time around. */
-  smal_mark_ptr_exact(finalized, finalized->referred);
+  smal_mark_ptr(0, finalized->referred);
   /* Forget all finalizers. */
   remove_finalized(finalized);
   /* Add to finalized queue. */
@@ -127,7 +127,7 @@ void referred_sweeped(smal_finalized *finalized)
   If finalizer's referred is not reachable, 
   forget referred and add finalizer to its finalizer queues.
 */
-void smal_finalizer_before_sweep()
+void smal_finalizer_after_mark()
 {
   voidP_voidP_TableIterator i;
   if ( ! initialized ) initialize();
@@ -139,6 +139,10 @@ void smal_finalizer_before_sweep()
       referred_sweeped(finalized);
   }
   smal_thread_mutex_unlock(&referred_table_mutex);
+}
+
+void smal_finalizer_before_sweep()
+{
 }
 
 void smal_finalizer_after_sweep()
