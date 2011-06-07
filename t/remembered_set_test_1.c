@@ -8,8 +8,8 @@
 
 int main(int argc, char **argv)
 {
-  int i = 0;
-  int ncollect = 2;
+  int i;
+  int ncollect = 3;
   int alloc_id = 0;
   int alloc_n = 100;
   my_cons *x = 0, *y = 0;
@@ -24,6 +24,7 @@ int main(int argc, char **argv)
     desc.object_size = sizeof(my_cons);
     desc.mark_func = my_cons_mark;
     desc.mostly_unchanging = 1;
+    desc.collections_per_sweep = ncollect;
     my_cons_type_mu = smal_type_for_desc(&desc);
   }
 
@@ -136,11 +137,11 @@ int main(int argc, char **argv)
 
   x = y = 0;
   // smal_debug_level = 9;
-  for ( i = 0; i < ncollect; ++ i ) {
+  for ( i = 0; i < ncollect * 2; ++ i ) {
     smal_collect();
     fprintf(stderr, "dereference all %d\n", i);
+    my_print_stats();
   }
-  my_print_stats();
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);

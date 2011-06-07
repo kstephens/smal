@@ -34,7 +34,6 @@ size_t _smal_page_mask = smal_page_mask;
 size_t smal_page_mask = smal_page_size_default - 1;
 #endif
 
-
 /*********************************************************************
  * Debugging support.
  */
@@ -50,6 +49,7 @@ const char *smal_stats_names[] = {
   "live_before_sweep_n",
   "free_n",
   "buffer_n",
+  "collection_n",
   "mmap_size",
   "mmap_total",
   "buffer_mutations",
@@ -181,8 +181,8 @@ static smal_thread_rwlock buffer_table_lock;
 
 static smal_thread_lock _smal_collect_inner_lock;
 
-static size_t collect_id; /* may wrap. */
-static int in_collect; /* protected by alloc_lock */
+static size_t collect_id; /** may wrap. */
+static int in_collect; /** protected by alloc_lock */
 static int in_mark;
 static int in_sweep;
 static int no_collect;
@@ -192,6 +192,39 @@ void null_func(void *ptr)
 {
   /* NOTHING */
 }
+
+#define smal_LOCK_STATS(N)						\
+  do {									\
+    smal_thread_mutex_##N(&buffer_head.stats._mutex);			\
+    smal_thread_mutex_##N(&self->type->stats._mutex);			\
+    smal_thread_mutex_##N(&self->stats._mutex);				\
+  } while ( 0 ) 
+
+#define smal_UPDATE_STATS(N, EXPR)					\
+  do {									\
+    buffer_head.stats.N EXPR;						\
+    self->type->stats.N EXPR;						\
+    self->stats.N EXPR;							\
+  } while ( 0 )
+
+/*********************************************************************
+ * subsystems
+ */
+
+static inline
+void _smal_mark_ptr(void *, void*);
+
+#if SMAL_WRITE_BARRIER
+#include "write_barrier.h"
+#endif
+
+#if SMAL_MARK_QUEUE
+#include "mark_queue.h"
+#endif
+
+#if SMAL_REMEMBERED_SET
+#include "remembered_set.h"
+#endif
 
 /************************************************************************
  ** Map any address to smal_buffer*.
@@ -344,19 +377,6 @@ void smal_buffer_table_remove(smal_buffer *self)
 static
 int smal_buffer_set_object_size(smal_buffer *self, size_t object_size);
 
-#define smal_LOCK_STATS(N)						\
-  do {									\
-    smal_thread_mutex_##N(&buffer_head.stats._mutex);			\
-    smal_thread_mutex_##N(&self->type->stats._mutex);			\
-    smal_thread_mutex_##N(&self->stats._mutex);				\
-  } while ( 0 ) 
-
-#define smal_UPDATE_STATS(N, EXPR)					\
-  do {									\
-    buffer_head.stats.N EXPR;						\
-    self->type->stats.N EXPR;						\
-    self->stats.N EXPR;							\
-  } while ( 0 )
 
 #ifdef SMAL_WRITE_BARRIER
 void smal_buffer_write_unprotect(smal_buffer *);
@@ -554,7 +574,8 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
 
 #if SMAL_WRITE_BARRIER
   if ( self->type->desc.mostly_unchanging )
-    self->mutation_write_barrier = 1;
+    self->mutation_write_barrier = 
+      self->use_remembered_set = 1;
 #endif
 
   smal_LOCK_STATS(lock);
@@ -611,8 +632,12 @@ void smal_buffer_free(smal_buffer *self)
   smal_debug(1, "(%p)", self);
 
   // Disable write barrier.
-#ifdef SMAL_WRITE_BARRIER
+#if SMAL_WRITE_BARRIER
   smal_buffer_write_unprotect(self);
+#endif
+
+#if SMAL_REMEMBERED_SET
+  smal_remembered_set_free(self->remembered_set);
 #endif
 
   // Remove self from buffer table.
@@ -677,21 +702,6 @@ smal_buffer *smal_buffer_from_ptr(void *ptr)
   return buf && smal_buffer_ptr_is_validQ(buf, ptr) ? buf : 0;
 }
 
-#if SMAL_WRITE_BARRIER
-#include "write_barrier.h"
-#endif
-
-static inline
-void _smal_mark_ptr(void *, void*);
-
-#if SMAL_MARK_QUEUE
-#include "mark_queue.h"
-#endif
-
-#if SMAL_REMEMBERED_SET
-#include "remembered_set.h"
-#endif
-
 /************************************************************************************
  * Mark bits
  */
@@ -708,41 +718,47 @@ void _smal_mark_ptr(void *, void*);
 int _smal_debug_mark = 0;
 
 static inline
-void _smal_buffer_mark_ptr(smal_buffer *buf, void *referrer, void *ptr)
+void _smal_buffer_mark_ptr(smal_buffer *self, void *referrer, void *ptr)
 {
   assert(in_collect); /* mark_bits should only be touched by smal_collect() and its thread. */
-  // smal_thread_rwlock_rdlock(&buf->mark_bits_lock);
-  // assert(buf->page_id == smal_buffer_page_id(buf));
+  // smal_thread_rwlock_rdlock(&self->mark_bits_lock);
+  // assert(buf->page_id == smal_buffer_page_id(self));
 #if 0
-  smal_debug(6, "ptr %p is valid in buf %p", ptr, buf);
-  smal_debug(7, "smal_buffer_mark_ptr(%p, %p, %p) = 0x%08x", buf, referrer, ptr,
-	     (unsigned int) smal_buffer_mark_word(buf, ptr));
+  smal_debug(6, "ptr %p is valid in buf %p", ptr, self);
+  smal_debug(7, "smal_buffer_mark_ptr(%p, %p, %p) = 0x%08x", self, referrer, ptr,
+	     (unsigned int) smal_buffer_mark_word(self, ptr));
 #endif
-  if ( ! smal_buffer_markQ(buf, ptr) ) {
+
+#if SMAL_REMEMBERED_SET
+  {
+    smal_buffer *referrer_buf;
+    /* Record pointers from the referrer buffer to the ptr buffer? */
+    if ( referrer && 
+	 (referrer_buf = smal_ptr_to_buffer(referrer))->record_remembered_set &&
+	 referrer_buf != self ) {
+      smal_remembered_set_add(referrer_buf->remembered_set, referrer, ptr);
+    }
+  }
+#endif
+
+  if ( ! smal_buffer_markQ(self, ptr) ) {
 #if 0
     smal_debug(5, "ptr %p is unmarked", ptr);
 #endif
     if ( _smal_debug_mark ) {
-      fprintf(stderr, "  %d M(%p, %p)\n", (int) collect_id, referrer, ptr);
+      fprintf(stderr, "  %d M(%p, %p)\n", (int) self->stats.collection_n, referrer, ptr);
     }
 
     // smal_thread_rwlock_unlock(&buf->mark_bits_lock);
     // smal_thread_rwlock_wrlock(&buf->mark_bits_lock);
-    smal_buffer_mark(buf, ptr);
+    smal_buffer_mark(self, ptr);
+
     // smal_thread_rwlock_unlock(&buf->mark_bits_lock);
     // fprintf(stderr, "M");
-#if SMAL_REMEMBERED_SET
-    {
-      smal_buffer *referrer_buf;
-      /* Record pointers from the referrer buffer to the ptr buffer? */
-      if ( referrer && 
-	   (referrer_buf = smal_ptr_to_buffer(referrer))->record_remembered_set &&
-	   referrer_buf != buf ) {
-	smal_remembered_set_add(referrer_buf->remembered_set, ptr);
-      }
-    }
-#endif
-    buf->type->desc.mark_func(ptr);
+
+    if ( ! self->markable )
+      return;
+    self->type->desc.mark_func(ptr);
   }
   // smal_thread_rwlock_unlock(&buf->mark_bits_lock);
 }
@@ -840,9 +856,7 @@ void smal_mark_ptr_range(void *referrer, void *ptr, void *ptr_end)
 int smal_object_reachableQ(void *ptr)
 {
   smal_buffer *buf;
-  if ( ! ptr )
-    return 0;
-  assert(in_collect);
+  // assert(in_collect);
   buf = smal_ptr_to_buffer(ptr);
   if ( smal_buffer_ptr_is_in_rangeQ(buf, ptr) )
     return ! ! smal_buffer_markQ(buf, ptr);
@@ -887,7 +901,7 @@ void *smal_buffer_alloc_object(smal_buffer *self)
   }
 
 #if SMAL_WRITE_BARRIER
-  /* Assume buffer is mutation because we are allocating from it. */
+  /* Assume buffer is mutated because we are allocating from it. */
   if ( ptr )
     smal_buffer_reprotect_mutation(self); 
 #endif
@@ -896,19 +910,16 @@ void *smal_buffer_alloc_object(smal_buffer *self)
   if ( ptr ) {
     smal_UPDATE_STATS(alloc_id, += 1);
     smal_UPDATE_STATS(live_n, += 1);
-    if ( free_n ) {
-      assert(buffer_head.stats.free_n > 0);
-      smal_UPDATE_STATS(free_n, -= 1);
-    }
-    else if ( alloc_n ) {
-      smal_UPDATE_STATS(alloc_n, += 1);
-    }
+    smal_UPDATE_STATS(free_n, -= free_n);
+    smal_UPDATE_STATS(alloc_n, += alloc_n);
+#if 0
     assert(self->stats.avail_n > 0);
     assert(self->type->stats.avail_n > 0);
     assert(buffer_head.stats.avail_n > 0);
+#endif
     smal_UPDATE_STATS(avail_n, -= 1);
 
-    /* If during collection, assume smal_alloc() is a rentrant call or from another thread,
+    /* If during collection, assume smal_alloc() is a reentrant call or from another thread,
        protect it from sweep.
     */
     if ( in_collect ) {
@@ -968,28 +979,55 @@ void smal_buffer_before_mark(smal_buffer *self)
   // Remove from type's alloc_buffer, if appropriate.
   smal_buffer_stop_allocations(self);
 
-  /* Clear mark bits. */
-  // smal_thread_rwlock_wrlock(&self->mark_bits_lock);
-  smal_bitmap_clr_all(&self->mark_bits);
-  // smal_thread_rwlock_unlock(&self->mark_bits_lock);
+  /* Should this buffer be sweepable and markable this time? */
+  if ( (self->markable = 
+	self->sweepable = 
+	((++ self->stats.collection_n) % 
+	 self->type->desc.collections_per_sweep == 0
+	 )) ) {
+    /* Clear mark bits. */
+    smal_bitmap_clr_all(&self->mark_bits);
+  }
 
   /* Prepare to re-compute live_n. */
-  smal_thread_mutex_lock(&self->stats._mutex);
+  // smal_thread_mutex_lock(&self->stats._mutex); // Is this lock necessary? allocations have been paused. 
   self->stats.live_before_sweep_n = self->stats.live_n;
-  smal_thread_mutex_unlock(&self->stats._mutex);
+  // smal_thread_mutex_unlock(&self->stats._mutex);
 
   /* Prepare remembered_set. */
 #if SMAL_REMEMBERED_SET
-  if ( self->mutation ) {
-    self->remembered_set_valid = 0;
+  if ( self->use_remembered_set ) {
+    if ( ! self->remembered_set )
+      self->remembered_set = smal_remembered_set_new(self);
+
+    /* If buffer was mutated, its remembered set is no longer valid. */
+    if ( self->mutation ) {
+      self->remembered_set_valid = 0;
+      // fprintf(stderr, "  %p remembered_set_valid = 0\n", self);
+    }
+
+    /* If remembered_set is not valid,
+       clear it, mark through this buffer, to capture its references to other buffers. */
+    if ( ! self->remembered_set_valid )
+      self->record_remembered_set = 
+	self->markable = 1; 
+
+    if ( self->record_remembered_set )
+      smal_remembered_set_clear(self->remembered_set);
   }
+#endif
+#if 0
+  if ( self->sweepable )
+    fprintf(stderr, "  %p sweepable\n", self);
+  if ( self->markable )
+    fprintf(stderr, "  %p markable\n", self);
 #endif
 }
 
 static
 void smal_buffer_sweep(smal_buffer *self)
 {
-  /* Assume every alloc after now is an explicit allocation. */
+  /* Assume every alloc after now is an errant allocation. */
   void *alloc_ptr = smal_buffer_alloc_ptr(self);
   size_t live_n = 0;
 #if 0
@@ -997,8 +1035,22 @@ void smal_buffer_sweep(smal_buffer *self)
   void **free_ptrs_p = free_ptrs;
 #endif
 
+#if SMAL_REMEMBERED_SET
+  /*
+    If remembered_set was recorded, finish it, mark it valid and use it during future 
+    mark phases.
+  */
+  if ( self->record_remembered_set ) {
+    self->record_remembered_set = 0;
+    smal_remembered_set_finish(self->remembered_set);
+    self->remembered_set_valid = 1;
+    // fprintf(stderr, "  %p remembered_set_valid = 1 (%d)\n", self, (int) self->remembered_set->n_ptrs);
+    // self->sweepable = 0;
+  }
+#endif
+
   /* Sweep this time? */
-  if ( collect_id % self->type->desc.collections_per_sweep == 0 ) {
+  if ( self->sweepable ) {
 
 #if SMAL_WRITE_BARRIER
     /* Avoid spurious write barrier faults during sweep. */
@@ -1008,8 +1060,8 @@ void smal_buffer_sweep(smal_buffer *self)
   // fprintf(stderr, "  s_b_s(b@%p)\n", self);
 
   // smal_thread_rwlock_wrlock(&self->mark_bits_lock);
-  smal_thread_rwlock_wrlock(&self->free_bits_lock);
-  smal_thread_mutex_lock(&self->free_list_mutex);
+  // smal_thread_rwlock_wrlock(&self->free_bits_lock);
+  // smal_thread_mutex_lock(&self->free_list_mutex);
 
   smal_debug(3, "(%p)", self);
   smal_debug(4, "  mark_bits.set_n = %d", self->mark_bits.set_n);
@@ -1032,8 +1084,8 @@ void smal_buffer_sweep(smal_buffer *self)
 
   // free(free_ptrs);
 
-  smal_thread_mutex_unlock(&self->free_list_mutex);
-  smal_thread_rwlock_unlock(&self->free_bits_lock);
+  //smal_thread_mutex_unlock(&self->free_list_mutex);
+  //smal_thread_rwlock_unlock(&self->free_bits_lock);
   // smal_thread_rwlock_unlock(&self->mark_bits_lock);
 
   smal_debug(4, "  live_n = %d, stats.free_n = %d",
@@ -1049,6 +1101,9 @@ void smal_buffer_sweep(smal_buffer *self)
     live_n = self->stats.live_before_sweep_n;
   }
 
+  /* No additional objects should have been allocated during sweep. */
+  assert(self->alloc_ptr == alloc_ptr);
+  
   /* Does buffer have live objects? */
   if ( live_n ) {
     /* Buffer can possibly be allocated from. */
@@ -1059,9 +1114,6 @@ void smal_buffer_sweep(smal_buffer *self)
     smal_buffer_clear_mutation(self);
 #endif
   } else {
-    /* No additional objects should have been allocated. */
-    assert(self->alloc_ptr == alloc_ptr);
-    
     smal_buffer_free(self);
   }
 }
@@ -1086,6 +1138,8 @@ void _smal_collect_inner()
 
   ++ in_collect;
   ++ collect_id;
+
+  ++ buffer_head.stats.collection_n;
 
   /* Prevent invalidating page_id min, max. */
   smal_thread_lock_lock(&page_id_min_max_keep);
@@ -1118,12 +1172,13 @@ void _smal_collect_inner()
     smal_mark_ptr_range(0, &thr->registers, &thr->registers + 1);
   }
   smal_collect_mark_roots();
+
+  smal_mark_queue_mark_all(&mark_queue);
+
 #if SMAL_REMEMBERED_SET
   smal_dllist_each(&buffer_collecting, buf); {
-    if ( buf->remembered_set && buf->remembered_set_valid ) {
+    if ( buf->remembered_set_valid )
       smal_remembered_set_mark(buf->remembered_set);
-    }
-    smal_buffer_before_mark(buf);
   } smal_dllist_each_end();
 #endif
 
@@ -1203,7 +1258,6 @@ smal_type *smal_type_for_desc(smal_type_descriptor *desc)
       return self;
     }
   } smal_dllist_each_end();
-  smal_thread_mutex_unlock(&type_head_mutex);
 
   self = malloc(sizeof(*self));
   memset(self, 0, sizeof(*self));
@@ -1215,7 +1269,6 @@ smal_type *smal_type_for_desc(smal_type_descriptor *desc)
   smal_thread_rwlock_init(&self->buffers_lock);
   smal_thread_mutex_init(&self->alloc_buffer_mutex);
   
-  smal_thread_mutex_lock(&type_head_mutex);
   smal_dllist_init(self);
   smal_dllist_insert(&type_head, self);
   smal_thread_mutex_unlock(&type_head_mutex);

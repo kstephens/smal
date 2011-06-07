@@ -76,6 +76,7 @@ struct smal_stats {
   size_t live_before_sweep_n; /** number of objects known to be live before sweep. */
   size_t free_n; /** number of objects on free_list. */
   size_t buffer_n; /** number of buffers active. */
+  size_t collection_n; /** number of collections. */
   size_t mmap_size; /** bytes mmap()ed. */
   size_t mmap_total; /** total bytes mmap()ed, may wrap. */
   size_t buffer_mutations; /** mutations: valid only for buffers with dirty_write_barrier.  */
@@ -152,6 +153,9 @@ struct smal_buffer {
   smal_thread_rwlock mutation_lock;
   int mutation_write_barrier; /** If true, use write barrier flag mutation if write protect region is modified. */
   int mutation; /** If true, elements within smal_buffer allocation space were mutated. */
+
+  int markable;  /** If true, this buffer should mark objects into it. */
+  int sweepable; /** If true, this buffer is up for sweeping. */
 
 #if SMAL_REMEMBERED_SET
   int use_remembered_set;
