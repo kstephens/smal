@@ -65,6 +65,7 @@ doc/html/index.html : Makefile $(C_FILES) $(H_FILES) doc/doxygen.conf # doc/*.pn
 	mkdir -p doc/html
 	-#cp -p doc/*.png doc/html/
 	doxygen doc/doxygen.conf 2>&1 | tee doc/doxygen.log
+	open doc/html/index.html
 
 doc-clean :
 	rm -rf doc/html/ doc/latex/

@@ -146,6 +146,5 @@ void smal_mark_queue_add(void *referrer, int ptr_n, void **ptrs, int pointers_to
 #if 0
   fprintf(stderr, "%*s s_m_q_a(%p, ...): DONE\n", -- mark_queue_add_depth, " ", referrer);
 #endif
-  smal_mark_queue_mark(0);
 }
 

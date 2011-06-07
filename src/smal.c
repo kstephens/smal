@@ -220,6 +220,9 @@ void _smal_mark_ptr(void *, void*);
 
 #if SMAL_MARK_QUEUE
 #include "mark_queue.h"
+#define smal_after_mark_func() smal_mark_queue_mark(0)
+#else
+#define smal_after_mark_func() ((void) 0)
 #endif
 
 #if SMAL_REMEMBERED_SET
@@ -759,6 +762,7 @@ void _smal_buffer_mark_ptr(smal_buffer *self, void *referrer, void *ptr)
     if ( ! self->markable )
       return;
     self->type->desc.mark_func(ptr);
+    smal_after_mark_func();
   }
   // smal_thread_rwlock_unlock(&buf->mark_bits_lock);
 }
