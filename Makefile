@@ -5,7 +5,7 @@ INC_DIR=include/#
 
 CFLAGS_OPT = -O2 #
 CFLAGS_OPT = -O3 #
-CFLAGS_OPT = #
+#CFLAGS_OPT = #
 ifneq ($(ENABLE_PROF),)
 CFLAGS_PROF = -pg -DSMAL_PROF #
 else
