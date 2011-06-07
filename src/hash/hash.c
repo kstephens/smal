@@ -11,6 +11,15 @@
 #undef EXTERN
 #endif
 
+#ifndef HASH_DEBUG_MALLOC
+#define HASH_DEBUG_MALLOC 0
+#endif
+
+#if HASH_DEBUG_MALLOC
+#define malloc(X) ({ void *__ptr = malloc(X); fprintf(stderr, "  malloc(%lu /* %s */) => %p %s:%d\n", (unsigned long) (X), #X, __ptr, __FUNCTION__, __LINE__); __ptr; })
+#define free(X)   ({ fprintf(stderr, "  free(%p /* %s */) %s:%d\n", (X), #X, __FUNCTION__, __LINE__); free(X); })
+#endif
+
 #ifndef HASH_MALLOC
 #define HASH_MALLOC(X) malloc(X)
 #endif
@@ -319,9 +328,10 @@ HASH_EXTERN void HASH(TableClear) ( HASH(Table) *ht )
 #endif
 
   for ( i = 0; i < HASH_TABLE_SIZE(ht); i ++ ) {
-    HASH(TableEntry) *e, *e_next;
+    HASH(TableEntry) *e = ht->_entries[i], *e_next;
 
-    for ( e = ht->_entries[i]; e; e = e_next ) {
+    ht->_entries[i] = 0;
+    for ( ; e; e = e_next ) {
       e_next = e->_next;
 
       /* free the key */
@@ -400,9 +410,6 @@ HASH_EXTERN int HASH(TableAdd_) (HASH(Table) *ht, HASH_KEY _key HASH_DATA_ARG ,H
   if ( en ) {
 #ifdef HASH_DATA_DECL
     HASH_DATA_SET((*en)->_data, _data);
-    HASH_WRITE_BARRIER(*en);
-#else
-    HASH_KEY_SET((*en)->_key, _key);
     HASH_WRITE_BARRIER(*en);
 #endif
     return 0;
