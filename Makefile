@@ -49,6 +49,7 @@ src/smal.s : src/smal.c $(H_FILES)
 	$(CC) $(CFLAGS) -DNASSERT=1 -S -o $@ $<
 
 src/hash/voidP_voidP_Table.o : src/hash/*.c src/hash/*.h src/hash/*.def
+src/hash/voidP_Table.o : src/hash/*.c src/hash/*.h src/hash/*.def
 
 $(SRC_LIB) : $(O_FILES)
 	rm -f $@
