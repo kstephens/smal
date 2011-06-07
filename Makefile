@@ -5,7 +5,7 @@ INC_DIR=include/#
 
 CFLAGS_OPT = -O2 #
 CFLAGS_OPT = -O3 #
-#CFLAGS_OPT = #
+# CFLAGS_OPT = #
 ifneq ($(ENABLE_PROF),)
 CFLAGS_PROF = -pg -DSMAL_PROF #
 else
@@ -46,7 +46,7 @@ SRC_LIB := src/libsmal.a #
 all : $(SRC_LIB) $(TESTS_T)
 
 src/smal.s : src/smal.c $(H_FILES)
-	$(CC) $(CFLAGS) -DNASSERT=1 -S -o $@ $<
+	$(CC) $(CFLAGS:-g=) -DNASSERT=1 -S -o $@ $<
 
 src/hash/voidP_voidP_Table.o : src/hash/*.c src/hash/*.h src/hash/*.def
 src/hash/voidP_Table.o : src/hash/*.c src/hash/*.h src/hash/*.def

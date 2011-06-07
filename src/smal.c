@@ -783,41 +783,33 @@ void _smal_mark_ptr(void *referrer, void *ptr)
 
 void smal_mark_ptr(void *referrer, void *ptr)
 {
-  smal_mark_queue_add_one(referrer, ptr);
+  smal_mark_queue_add(referrer, 1, &ptr, 0);
 }
-
-#define smal_mark_ptr_inner(REF,PTR) smal_mark_ptr(REF,PTR)
-
 void smal_mark_ptr_n(void *referrer, int n_ptrs, void **ptrs)
 {
-  smal_mark_queue_add(&mark_queue, referrer, n_ptrs, ptrs, 0);
+  smal_mark_queue_add(referrer, n_ptrs, ptrs, 0);
 }
-
 void smal_mark_bindings(int n, void ***bindings)
 {
-  smal_mark_queue_add(&mark_queue, 0, n, (void**) bindings, 1);
+  smal_mark_queue_add(0, n, (void**) bindings, 1);
 }
 
 #else
 
+#define smal_mark_queue_start() ((void) 0)
+#define smal_mark_queue_mark_all() ((void) 0)
 void smal_mark_ptr(void *referrer, void *ptr)
 {
   _smal_mark_ptr(referrer, ptr);
 }
-
 void smal_mark_ptr_n(void *referrer, int n_ptrs, void **ptrs)
 {
-  while ( n_ptrs -- > 0 )
+  while ( -- n_ptrs >= 0 )
     _smal_mark_ptr(referrer, *(ptrs ++));
 }
-
-#define smal_mark_queue_start() ((void) 0)
-#define smal_mark_ptr_inner(REF,PTR) _smal_mark_ptr(REF,PTR)
-#define smal_mark_queue_mark_all(Q) ((void) Q)
-
 void smal_mark_bindings(int n, void ***bindings)
 {
-  while ( n -- > 0 ) {
+  while ( -- n >= 0 ) {
     void *ptr = * *(bindings ++);
     _smal_mark_ptr(0, ptr);
   }
@@ -1176,7 +1168,7 @@ void _smal_collect_inner()
   }
   smal_collect_mark_roots();
 
-  smal_mark_queue_mark_all(&mark_queue);
+  smal_mark_queue_mark_all();
 
 #if SMAL_REMEMBERED_SET
   smal_dllist_each(&buffer_collecting, buf); {
@@ -1185,12 +1177,11 @@ void _smal_collect_inner()
   } smal_dllist_each_end();
 #endif
 
-  smal_mark_queue_mark_all(&mark_queue);
+  smal_mark_queue_mark_all();
 
   smal_collect_after_mark();
-
   /* smal_collect_after_mark() (finalizers) may have queued marks. */
-  smal_mark_queue_mark_all(&mark_queue);
+  smal_mark_queue_mark_all();
   -- in_mark;
 
   /* Begin sweep. */
