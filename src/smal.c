@@ -980,14 +980,11 @@ void smal_buffer_before_mark(smal_buffer *self)
   smal_buffer_stop_allocations(self);
 
   /* Should this buffer be sweepable and markable this time? */
-  if ( (self->markable = 
-	self->sweepable = 
-	((++ self->stats.collection_n) % 
-	 self->type->desc.collections_per_sweep == 0
-	 )) ) {
-    /* Clear mark bits. */
-    smal_bitmap_clr_all(&self->mark_bits);
-  }
+  self->markable = 
+    self->sweepable = 
+    ((++ self->stats.collection_n) % 
+     self->type->desc.collections_per_sweep == 0
+     );
 
   /* Prepare to re-compute live_n. */
   // smal_thread_mutex_lock(&self->stats._mutex); // Is this lock necessary? allocations have been paused. 
@@ -1016,6 +1013,12 @@ void smal_buffer_before_mark(smal_buffer *self)
       smal_remembered_set_clear(self->remembered_set);
   }
 #endif
+
+  if ( self->markable ) {
+    /* Clear mark bits. */
+    smal_bitmap_clr_all(&self->mark_bits);
+  }
+
 #if 0
   if ( self->sweepable )
     fprintf(stderr, "  %p sweepable\n", self);
