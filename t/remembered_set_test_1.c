@@ -110,6 +110,16 @@ int main(int argc, char **argv)
     assert(stats.buffer_mutations == 2);
   }
 
+  fprintf(stderr, "allocing more for x list\n");
+  for ( alloc_id = 0; alloc_id < alloc_n; ++ alloc_id ) {
+    my_cons *c = smal_alloc(my_cons_type);
+    c->car = (void*) 2;
+    c->cdr = x;
+    x = c;
+  }
+  smal_collect();
+  my_print_stats();
+
 #if 0
   fprintf(stderr, "dropping some of x\n");
   {
@@ -138,14 +148,20 @@ int main(int argc, char **argv)
   x = y = 0;
   // smal_debug_level = 9;
   for ( i = 0; i < ncollect * 2; ++ i ) {
+    smal_stats stats = { 0 };
     smal_collect();
     fprintf(stderr, "dereference all %d\n", i);
     my_print_stats();
+    smal_global_stats(&stats);
+    if ( i == 0 )
+      assert(stats.free_id == alloc_n);
+    if ( i == 2 )
+      assert(stats.free_id == alloc_n * 3);
   }
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
-    assert(stats.alloc_id == alloc_n * 2);
+    assert(stats.alloc_id == alloc_n * 3);
     assert(stats.free_id == stats.alloc_id);
     assert(stats.capacity_n == 0);
     assert(stats.buffer_n == 0);
