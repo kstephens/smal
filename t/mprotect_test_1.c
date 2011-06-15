@@ -18,20 +18,20 @@ static char area[8192];
 static void *mp_addr = area;
 static size_t mp_size;
 
-static int write_fault_signal;
-static struct siginfo write_fault_si;
-static void *write_fault_something;
+static volatile int write_fault_signal;
+static volatile struct siginfo write_fault_si;
+static volatile void *write_fault_something;
 
 static
-void write_fault(int signal, struct siginfo *si, void *something)
+void write_fault(int sig, struct siginfo *si, void *something)
 {
   int result;
   //  int errno_save = errno;
 
-  fprintf(stderr, "write_fault %d\n", signal);
+  fprintf(stderr, "write_fault %d\n", sig);
 
-  write_fault_signal = signal;
-  memcpy(&write_fault_si, &si, sizeof(write_fault_si));
+  write_fault_signal = sig;
+  memcpy((void*) &write_fault_si, &si, sizeof(write_fault_si));
   write_fault_something = something;
 
   result = mprotect(mp_addr, mp_size, PROT_READ | PROT_WRITE);
@@ -59,7 +59,7 @@ int main(int argc, char **argv)
   result = sigaction(SIGBUS, &sa, &sa_old);
   assert(result == 0);
 
-  /* OS X will not allow mprotect(addr, size, ...) if addr && size are not page aligned. */
+  /* OS X nor Linux will not allow mprotect(addr, size, ...) if addr && size are not page aligned. */
   {
     size_t offset;
     if ( (offset = ((size_t) mp_addr) % pagesize) )

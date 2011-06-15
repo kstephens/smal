@@ -16,7 +16,7 @@
 #define SMAL_WRITE_BARRIER 1
 #endif
 
-#if SMAL_WRITE_BARRIER && defined(__APPLE__)
+#if SMAL_WRITE_BARRIER && (defined(__APPLE__) || defined(__linux__))
 #define SMAL_SEGREGATE_BUFFER_FROM_PAGE 1
 #endif
 

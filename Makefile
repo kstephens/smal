@@ -24,8 +24,10 @@ CFLAGS_DEBUG = #
 endif
 ifneq ($(ENABLE_PTHREAD),)
 CFLAGS_THREAD = -DSMAL_PTHREAD=1 #
+LIBS_THREAD += -lpthread
 else
 CFLAGS_THREAD = #
+LIBS_THREAD = #
 endif
 
 CFLAGS_MARK_QUEUE = #
@@ -43,6 +45,8 @@ TESTS_C := $(shell echo t/*.c) #
 TESTS_T := $(TESTS_C:%.c=%.t) #
 SRC_LIB := src/libsmal.a #
 
+T_LIBS := $(LIBS_THREAD) # 
+
 all : $(SRC_LIB) $(TESTS_T)
 
 src/smal.s : src/smal.c $(H_FILES)
@@ -58,7 +62,9 @@ $(SRC_LIB) : $(O_FILES)
 $(O_FILES) : $(H_FILES)
 
 t/%.t : t/%.c $(SRC_LIB) $(H_FILES)
-	$(CC) $(CFLAGS:$(CFLAGS_OPT)=) -I./t -DSMAL_UNIT_TEST=1 -DSMAL_DEBUG=1 -o $@ $(@:%.t=%.c) $(SRC_LIB) 
+	$(CC) $(CFLAGS:$(CFLAGS_OPT)=) -I./t -DSMAL_UNIT_TEST=1 -DSMAL_DEBUG=1 -o $@ $(@:%.t=%.c) $(SRC_LIB) $(T_LIBS) -lpthread
+
+t/%.t : override CFLAGS_OPT=
 
 doc/html : doc/html/index.html
 doc/html/index.html : Makefile $(C_FILES) $(H_FILES) doc/doxygen.conf # doc/*.png
