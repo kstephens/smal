@@ -19,11 +19,11 @@ static void *mp_addr = area;
 static size_t mp_size;
 
 static int write_fault_signal;
-static struct __siginfo write_fault_si;
+static struct siginfo write_fault_si;
 static void *write_fault_something;
 
 static
-void write_fault(int signal, struct __siginfo *si, void *something)
+void write_fault(int signal, struct siginfo *si, void *something)
 {
   int result;
   //  int errno_save = errno;
@@ -72,6 +72,8 @@ int main(int argc, char **argv)
   assert(write_fault_signal == 0);
   *((void**) mp_addr) = 0;
   assert(write_fault_signal != 0);
+  // assert(write_fault_si.si_addr == mp_addr);
+  assert(write_fault_si.si_ptr == mp_addr);
 
   fprintf(stderr, "\n%s OK\n", argv[0]);
 
