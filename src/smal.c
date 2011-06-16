@@ -748,23 +748,19 @@ void _smal_buffer_mark_ptr(smal_buffer *self, void *referrer, void *ptr)
 #if 0
     smal_debug(5, "ptr %p is unmarked", ptr);
 #endif
+#if 0
     if ( _smal_debug_mark ) {
       fprintf(stderr, "  %d M(%p, %p)\n", (int) self->stats.collection_n, referrer, ptr);
     }
+#endif
 
-    // smal_thread_rwlock_unlock(&buf->mark_bits_lock);
-    // smal_thread_rwlock_wrlock(&buf->mark_bits_lock);
     smal_buffer_mark(self, ptr);
-
-    // smal_thread_rwlock_unlock(&buf->mark_bits_lock);
-    // fprintf(stderr, "M");
 
     if ( ! self->markable )
       return;
     self->type->desc.mark_func(ptr);
     smal_after_mark_func();
   }
-  // smal_thread_rwlock_unlock(&buf->mark_bits_lock);
 }
 
 static inline
