@@ -6,17 +6,23 @@
 #include "my_cons.h"
 #include "roots_explicit.h"
 
-int main(int argc, char **argv)
+static 
+int run_test(int argc, char **argv, int alloc_n)
 {
   int i;
   int ncollect = 3;
   int alloc_id = 0;
-  int alloc_n = 100;
   my_cons *x = 0, *y = 0;
   my_cons *xp = 0, *yp = 0;
   smal_type *my_cons_type_mu; /* mostly_unchanging */
   smal_roots_4(x, y, xp, yp);
   
+#if 0
+  smal_debug_set_level(smal_debug_remembered_set, 9);
+  smal_debug_set_level(smal_debug_object_alloc, 2);
+  smal_debug_set_level(smal_debug_object_free, 2);
+#endif
+
   my_cons_type = smal_type_for(sizeof(my_cons), my_cons_mark, 0);
   {
     smal_type_descriptor desc;
@@ -29,8 +35,8 @@ int main(int argc, char **argv)
   }
 
   fprintf(stderr, "allocing for x list\n");
-  for ( alloc_id = 0; alloc_id < alloc_n; ++ alloc_id ) {
-    my_cons *c = smal_alloc(my_cons_type);
+  for ( i = 0; i < alloc_n; ++ i ) {
+    my_cons *c = smal_alloc(my_cons_type); ++ alloc_id;
     c->car = (void*) 1;
     c->cdr = x;
     x = c;
@@ -52,8 +58,8 @@ int main(int argc, char **argv)
   }
 
   fprintf(stderr, "allocing for y list (mostly_unchanging)\n");
-  for ( alloc_id = 0; alloc_id < alloc_n; ++ alloc_id ) {
-    my_cons *c = smal_alloc(my_cons_type_mu);
+  for ( i = 0; i < alloc_n; ++ i ) {
+    my_cons *c = smal_alloc(my_cons_type_mu); ++ alloc_id;
     c->car = (void*) 2;
     c->cdr = y;
     y = c;
@@ -64,13 +70,17 @@ int main(int argc, char **argv)
   smal_collect();
   my_print_stats();
 
-  fprintf(stderr, "mutating y list\n");
-  xp = x; yp = y;
+  fprintf(stderr, "mutating y list, y list cars point to x elements\n");
+  xp = x; yp = y; i = 0;
   while ( yp ) {
     yp->car = xp;
     yp = yp->cdr;
     xp = xp->cdr;
+    i ++;
   }
+  assert(xp == 0);
+  assert(i == alloc_n);
+  xp = yp = 0;
 
   {
     smal_stats stats = { 0 };
@@ -88,12 +98,16 @@ int main(int argc, char **argv)
   }
 
   fprintf(stderr, "mutating y list, again\n");
-  xp = x; yp = y;
+  xp = x; yp = y; i = 0;
   while ( yp ) {
     yp->car = xp;
     yp = yp->cdr;
     xp = xp->cdr;
+    i ++;
   }
+  assert(xp == 0);
+  assert(i == alloc_n);
+  xp = yp = 0;
 
   {
     smal_stats stats = { 0 };
@@ -111,8 +125,8 @@ int main(int argc, char **argv)
   }
 
   fprintf(stderr, "allocing more for x list\n");
-  for ( alloc_id = 0; alloc_id < alloc_n; ++ alloc_id ) {
-    my_cons *c = smal_alloc(my_cons_type);
+  for ( i = 0; i < alloc_n; ++ i ) {
+    my_cons *c = smal_alloc(my_cons_type); ++ alloc_id;
     c->car = (void*) 2;
     c->cdr = x;
     x = c;
@@ -120,37 +134,11 @@ int main(int argc, char **argv)
   smal_collect();
   my_print_stats();
 
-#if 0
-  fprintf(stderr, "dropping some of x\n");
-  {
-    my_cons *c;
-    for ( c = x; c; c = c->cdr ) {
-      if ( rand() % 10 > 5 ) {
-	c->cdr = c->cdr ? ((my_cons*) c->cdr)->cdr : 0;
-      }
-    }
-  }
-  smal_collect();
-  my_print_stats();
-
-  fprintf(stderr, "allocing more for y list\n");
-  for ( alloc_id = 0; alloc_id < alloc_n; ++ alloc_id ) {
-    my_cons *c = smal_alloc(my_cons_type);
-    c->car = (void*) 2;
-    c->cdr = y;
-    y = c;
-  }
-  smal_collect();
-  my_print_stats();
-  
-#endif
-
   x = y = 0;
-  // smal_debug_level = 9;
   for ( i = 0; i < ncollect * 2; ++ i ) {
     smal_stats stats = { 0 };
-    smal_collect();
     fprintf(stderr, "dereference all %d\n", i);
+    smal_collect();
     my_print_stats();
     smal_global_stats(&stats);
     if ( i == 0 )
@@ -172,5 +160,13 @@ int main(int argc, char **argv)
   
   fprintf(stderr, "\n%s OK\n", argv[0]);
   return 0;
+}
+
+int main(int argc, char **argv)
+{
+  int alloc_n = 100;
+  if ( argc > 1 )
+    alloc_n = atoi(argv[1]);
+  return run_test(argc, argv, alloc_n);
 }
 

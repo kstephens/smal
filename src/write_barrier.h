@@ -11,9 +11,17 @@ void smal_write_barrier_init()
   smal_write_barrier_init_os();
 }
 
+static int smal_mprotect(smal_buffer *self, void *addr, size_t size, int prot)
+{
+  int result = mprotect(addr, size, prot);
+  smal_debug(mprotect, 2, " b@%p mprotect(@%p, 0x%lx, %d) = %d (%s)", self, (void*) addr, (unsigned long) size, (unsigned int) prot, result, strerror(errno));
+  if ( result ) abort();
+  // smal_debug_print_smaps();
+  return result;
+}
+
 void smal_buffer_write_protect(smal_buffer *self)
 {
-  int result;
 #if defined(__APPLE__) || defined(__linux__)
   /* Mach cannot mprotect() non-page alignments.
      This also implies SMAL_SEGREGATE_BUFFER_FROM_PAGE or else all locking and accounting 
@@ -36,11 +44,7 @@ void smal_buffer_write_protect(smal_buffer *self)
 	  self->write_protect_addr == addr &&
 	  self->write_protect_size == size
 	  ) ) {
-    result = mprotect(addr, size, PROT_READ);
-    smal_debug(2, " mprotect(@%p,0x%lx,0x%x) = %d", (void*) addr, (unsigned long) size, (unsigned int) PROT_READ);
-    fprintf(stderr, "  %s: mprotect(@%p,0x%lx,0x%x) = %d", __FUNCTION__, (void*) addr, (unsigned long) size, (unsigned int) PROT_READ, result);
-    if ( result ) abort();
-
+    smal_mprotect(self, addr, size, PROT_READ);
     self->write_protect = 1;
     self->write_protect_addr = addr;
     self->write_protect_size = size;
@@ -48,41 +52,54 @@ void smal_buffer_write_protect(smal_buffer *self)
   smal_thread_rwlock_unlock(&self->write_protect_lock);
 }
 
-void smal_buffer_write_unprotect(smal_buffer *self)
+void smal_buffer_write_unprotect_force(smal_buffer *self)
 {
-  int result;
-
-  smal_thread_rwlock_wrlock(&self->write_protect_lock);
-  if ( self->write_protect ) {
-    result = mprotect(self->write_protect_addr, self->write_protect_size, PROT_READ | PROT_WRITE);
-    smal_debug(2, " mprotect(@%p,0x%lx,0x%x) = %d", (void*) self->write_protect_addr, (unsigned long) self->write_protect_size, (unsigned int) PROT_READ | PROT_WRITE);
-    fprintf(stderr, "  %s: mprotect(@%p,0x%lx,0x%x) = %d", __FUNCTION__, (void*) self->write_protect_addr, (unsigned long) self->write_protect_size, (unsigned int) PROT_READ | PROT_WRITE, result);
-    if ( result ) abort();
+  if ( self->write_protect_size ) {
+    smal_mprotect(self, self->write_protect_addr, self->write_protect_size, PROT_READ | PROT_WRITE);
     self->write_protect = 0;
     self->write_protect_addr = 0;
     self->write_protect_size = 0;
   }
+}
+
+void smal_buffer_write_unprotect(smal_buffer *self)
+{
+  smal_thread_rwlock_wrlock(&self->write_protect_lock);
+  if ( self->write_protect )
+    smal_buffer_write_unprotect_force(self);
   smal_thread_rwlock_unlock(&self->write_protect_lock);
 }
 
 int smal_write_barrier_mutation(void *addr, int code)
 {
   smal_buffer *self = smal_addr_to_buffer(addr);
-  if ( self && self->mutation_write_barrier ) {
-    smal_thread_rwlock_rdlock(&self->mutation_lock);
-    if ( ! self->mutation ) {
-      fprintf(stderr, "\n  mutation @%p in buf @%p [%p, %p)\n", addr, self, self->begin_ptr, self->alloc_ptr); fflush(stderr);
+
+  smal_debug(write_barrier, 4, " (@%p, sig %d) => b@%p", addr, code, self, self ? self->mutation_write_barrier : 0);
+  if ( self ) { 
+    smal_debug(write_barrier, 3, " (@%p, sig %d) => b@%p [@%p, @%p) mutation_write_barrier=%d", addr, code, self, self->begin_ptr, self->alloc_ptr, self->mutation_write_barrier);
+    if ( self->mutation_write_barrier ) {
+      smal_thread_rwlock_rdlock(&self->mutation_lock);
+      if ( ! self->mutation ) {
+	smal_debug(write_barrier, 2, " mutation @%p in buf b@%p", addr, self, self->begin_ptr, self->alloc_ptr);
+	smal_thread_rwlock_unlock(&self->mutation_lock);
+	smal_LOCK_STATS(lock);
+	smal_UPDATE_STATS(buffer_mutations, += 1);
+	smal_LOCK_STATS(unlock);
+	smal_thread_rwlock_wrlock(&self->mutation_lock);
+	self->mutation = 1;
+      }
       smal_thread_rwlock_unlock(&self->mutation_lock);
-      smal_LOCK_STATS(lock);
-      smal_UPDATE_STATS(buffer_mutations, += 1);
-      smal_LOCK_STATS(unlock);
-      smal_thread_rwlock_wrlock(&self->mutation_lock);
-      self->mutation = 1;
+      /* Allow mutator to continue unabated. */
+      smal_buffer_write_unprotect(self);
+      return 1; /* OK */
     }
-    smal_thread_rwlock_unlock(&self->mutation_lock);
+#if 0
     /* Allow mutator to continue unabated. */
-    smal_buffer_write_unprotect(self);
-    return 1; /* OK */
+    self->write_protect_addr = self->mmap_addr;
+    self->write_protect_size = self->mmap_size;
+    smal_buffer_write_unprotect_force(self);
+    return 2; /* OK?: in actual buffer, but mutation_write_barrier not enabled! */
+#endif
   }
   return 0; /* NOT OK */
 }
@@ -96,13 +113,13 @@ void smal_buffer_clear_mutation(smal_buffer *self)
     smal_buffer_write_protect(self);
 }
 
-void smal_buffer_reprotect_mutation(smal_buffer *self)
+void smal_buffer_assume_mutation(smal_buffer *self)
 {
   smal_thread_rwlock_wrlock(&self->mutation_lock);
   self->mutation = 1;
   smal_thread_rwlock_unlock(&self->mutation_lock);
   if ( self->mutation_write_barrier ) 
-    smal_buffer_write_protect(self);
+    smal_buffer_write_unprotect(self);
 }
 
 #ifdef __APPLE__

@@ -21,6 +21,7 @@ It does, however, optionally support:
 * Weak references.
 * Reference queues.
 * Finalizers.
+* Remembered Sets for Mostly Unchanging Buffers.
 
 == Main API ==
 
@@ -160,11 +161,11 @@ The algorithms/data structures are as follows:
 
 == Mostly Unchanging Objects ==
 
-SMAL supports designating a <code>smal_type</code> as containing mostly unchanging objects.  The smal_buffers for these objects are tracked for mutations and can be scanned for pointers less frequently by keeping a remembered set of references pointing outside itself.   NOT FULLY IMPLEMENTED, YET.
+SMAL supports designating a <code>smal_type</code> as containing mostly unchanging objects.  The smal_buffers for these objects are tracked for mutations and can be scanned for pointers less frequently by keeping a remembered set of references pointing outside itself.
 
 == Sweep Frequency ==
 
-Types can be created that will sweep objects only every N collections.  This should only be used for object types that are unlikely to ever become unreferenced during normal collection lifecycles.  This can be use in conjuntion with "Mostly Unchangeing Objects" feature.
+Types can be created that will sweep objects only every N collections.  This should only be used for object types that are unlikely to ever become unreferenced during normal collection lifecycles.  This can be use in conjuntion with "Mostly Unchanging Objects" feature.
 
 == Write Barrier ==
 

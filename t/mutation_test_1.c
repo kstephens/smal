@@ -16,6 +16,9 @@ int main(int argc, char **argv)
   my_cons *xp = 0, *yp = 0;
   smal_type *my_cons_type_mu; /* mostly_unchanging */
   smal_roots_4(x, y, xp, yp);
+
+  smal_debug_set_level(smal_debug_mprotect, 9);
+  smal_debug_set_level(smal_debug_mmap, 9);
   
   my_cons_type = smal_type_for(sizeof(my_cons), my_cons_mark, 0);
   {
@@ -53,6 +56,7 @@ int main(int argc, char **argv)
   fprintf(stderr, "allocing for y list (mostly_unchanging)\n");
   for ( alloc_id = 0; alloc_id < alloc_n; ++ alloc_id ) {
     my_cons *c = smal_alloc(my_cons_type_mu);
+    fprintf(stderr, "  c = %p\n", c);
     c->car = (void*) 2;
     c->cdr = y;
     y = c;

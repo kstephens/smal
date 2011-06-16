@@ -217,6 +217,28 @@ void smal_buffer_print_all(smal_buffer *self, const char *action);
  * Configuration
  */
 
+typedef enum smal_debug_t {
+  smal_debug_BEGIN,
+  smal_debug_all,
+  smal_debug_buffer,
+  smal_debug_object_alloc,
+  smal_debug_object_free,
+  smal_debug_mmap,
+  smal_debug_collect,
+  smal_debug_mark,
+  smal_debug_sweep,
+  smal_debug_write_barrier,
+  smal_debug_mprotect,
+  smal_debug_remembered_set,
+  smal_debug_END,
+} smal_debug_t;
+
+void smal_debug_set_level(smal_debug_t dt, int value);
+
+/*********************************************************************
+ * Configuration
+ */
+
 #if 0
 #define smal_buffer_object_size(buf) 24
 #define smal_buffer_object_alignment(buf) smal_buffer_object_size(buf)

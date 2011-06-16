@@ -8,23 +8,93 @@
 static struct sigaction sa_for_sig_old[64];
 static struct sigaction sa_for_sig_new[64];
 
+static char *sig_name;
+static char *si_code_name;
 static
-void write_fault(int sig, struct siginfo *si, void *something)
+void smal_get_sig_info(int sig, siginfo_t *si, void *something)
+{
+  sig_name = "unknown";
+  si_code_name = "unknown";
+  switch ( sig ) {
+#ifdef SIGSEGV
+  case SIGSEGV:
+    sig_name = "SIGSEGV";
+    switch ( si->si_code ) {
+#ifdef SEGV_MAPERR
+    case SEGV_MAPERR:
+      si_code_name = "SEGV_MAPERR";
+      break;
+#endif
+#ifdef SEGV_ACCERR
+    case SEGV_ACCERR:
+      si_code_name = "SEGV_ACCERR";
+      break;
+    }
+#endif
+    break;
+#endif
+#ifdef SIGBUS
+  case SIGBUS:
+    sig_name = "SIGBUS";
+    switch ( si->si_code ) {
+#ifdef BUG_ADRALN
+    case BUS_ADRALN:
+      si_code_name = "BUS_ADRALN";
+      break;
+#endif
+#ifdef BUG_ADDRERR
+    case BUS_ADRERR:
+      si_code_name = "BUS_ADRERR";
+      break;
+#endif
+#ifdef BUS_OBJERR
+    case BUS_OBJERR:
+      si_code_name = "BUS_OBJERR";
+      break;
+    }
+#endif
+    break;
+#endif
+  }
+}
+
+static
+void write_fault(int sig, siginfo_t *si, void *something)
 {
   int result;
   int errno_save = errno;
-  void *addr = si->si_ptr;
+  void *addr;
 
-  // fprintf(stderr, "write_fault %d at @%p\n", sig, addr);
+  /* Sometimes si_addr is 0? */
+  addr = si->si_addr; 
+  if ( ! addr )
+    addr = si->si_ptr; /* si_ptr? */
 
   result = smal_write_barrier_mutation(addr, sig);
 
-  fprintf(stderr, "  write_fault %d at @%p => %d\n", sig, addr, result);
+  smal_get_sig_info(sig, si, something);
+  fprintf(stderr, "  write_fault %d (%s) si_code %d (%s) at si_ptr @%p si_addr @%p addr @%p => %d\n", 
+	  sig, sig_name, 
+	  si->si_code, si_code_name,  
+	  si->si_ptr, si->si_addr,
+	  addr,
+	  result);
 
   errno = errno_save;
-
-  if ( ! result )
-    sa_for_sig_old[sig].sa_sigaction(sig, si, something);
+  if ( ! result ) {
+    void (*sa)(int, siginfo_t *, void*) = sa_for_sig_old[sig].sa_sigaction;
+    if ( (void*) sa != (void*) SIG_DFL && (void*) sa != (void*) SIG_IGN ) {
+      sa(sig, si, something);
+    } else {
+      smal_get_sig_info(sig, si, something);
+      fprintf(stderr, "\nsmal: pid %d: SIGNAL %d (%s) si_code %d (%s) at @%p\n", 
+	      (int) getpid(),
+	      sig, sig_name, 
+	      si->si_code, si_code_name,
+	      addr);
+      abort();
+    }
+  }
 }
 
 static
@@ -41,7 +111,11 @@ void setup_signal_handler(int sig)
   memset(sa_new, 0, sizeof(*sa_new));
   memset(sa_old, 0, sizeof(*sa_old));
   sa_new->sa_sigaction = write_fault;
-  sa_new->sa_flags = SA_SIGINFO | SA_RESTART;
+  sa_new->sa_flags = SA_SIGINFO | SA_RESTART
+#ifdef SA_NODEFER
+    | SA_NODEFER
+#endif
+    ;
   result = sigaction(sig, sa_new, sa_old);
   assert(result == 0);
 }

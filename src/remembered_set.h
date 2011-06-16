@@ -19,8 +19,9 @@ static inline
 void 
 smal_remembered_set_init(smal_remembered_set *self, smal_buffer *buf)
 {
-  voidP_TableInit(&self->ptr_table, 101);
   self->buf = buf;
+  smal_debug(remembered_set, 2, " b@%p init", self->buf);
+  voidP_TableInit(&self->ptr_table, 101);
   self->ptrs_valid = 0;
   self->ptrs = 0;
   self->n_ptrs = 0;
@@ -40,6 +41,7 @@ static inline
 void 
 smal_remembered_set_destroy(smal_remembered_set *self)
 {
+  smal_debug(remembered_set, 2, " b@%p destroy", self->buf);
   voidP_TableDestroy(&self->ptr_table);
   if ( self->ptrs )
     free(self->ptrs);
@@ -59,7 +61,7 @@ static inline
 void 
 smal_remembered_set_clear(smal_remembered_set *self)
 {
-  // fprintf(stderr, "  %p rs C\n", self->buf);
+  smal_debug(remembered_set, 2, " b@%p clear", self->buf);
   voidP_TableClear(&self->ptr_table);
   self->ptrs_valid = 0;
 }
@@ -68,11 +70,9 @@ static inline
 void smal_remembered_set_add(smal_remembered_set *self, void *referrer, void *ptr)
 {
   if ( voidP_TableAdd(&self->ptr_table, ptr) )  {
-    // fprintf(stderr, "*");
-    // fprintf(stderr, "  %p %p -> %p\n", self->buf, referrer, ptr);
+    smal_debug(remembered_set, 4, " b@%p @%p -> @%p", self->buf, referrer, ptr); 
   } else {
-    // fprintf(stderr, ".");
-    // fprintf(stderr, "  %p %p X> %p\n", self->buf, referrer, ptr);
+    smal_debug(remembered_set, 9, " b@%p @%p X> @%p", self->buf, referrer, ptr); 
   }
 }
 
@@ -101,13 +101,13 @@ void smal_remembered_set_finish(smal_remembered_set *self)
     
   self->ptrs_valid = 1;
   voidP_TableClear(&self->ptr_table);
-  // fprintf(stderr, "  %p rs nptrs %d\n", self->buf, (int) self->n_ptrs);
+  smal_debug(remembered_set, 2, " b@%p finish nptrs %d", self->buf, (int) self->n_ptrs);
 }
 
 static inline
 void smal_remembered_set_mark(smal_remembered_set *self)
 {
   smal_remembered_set_finish(self);
-  // fprintf(stderr, "  %p rs mark %d\n", self->buf, (int) self->n_ptrs);
+  smal_debug(remembered_set, 3, " b@%p mark %d", self->buf, (int) self->n_ptrs);
   smal_mark_ptr_n(0, self->n_ptrs, self->ptrs);
 }
