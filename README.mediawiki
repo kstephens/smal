@@ -125,12 +125,14 @@ Each <code>smal_buffer</code> maintains a mark bitmap and free bitmap indexable 
 Placing mark bits in a separate bitmap reduces memory overhead, esp. for <code>fork()</code>ed processes -- this protects
 copy-on-write pages from full mutation due to mark bit manipuations.
 
-An object's mark bitmap index is computed by dividing, the difference between its pointer and its <code>smal_buffer*</code>, by
-the size of the objects (<code>object_size</code>) allocated from the <code>smal_buffer</code>.
+An object's mark bitmap index is computed by dividing, the difference between its pointer and its <code>smal_buffer</code> <code>begin_ptr</code>, 
+by the size of the objects (<code>object_size</code>) allocated from the <code>smal_buffer</code>.
 
-If an object pointer is known to be allocated and aligned, <code>smal_mark_ptr_exact()</code> can test the mark bit in 25 x86 instructions,
-and mark the bit and recurse into the <code>mark_func</code> in another 7 x86 instructions, for a worst case of 32 x86 instructions.
-The non-exact version takes approx. 39 x86 instrutions in the worst case.
+If an object pointer is known to be allocated and aligned, <code>smal_mark_ptr()</code> can
+* test the mark bit in 14 x86 instructions,
+* set the mark bit in 5 x86 instructions and, 
+* recurse into the <code>mark_func</code> in 3 x86 instructions,
+for a worst case total of 22 x86 instructions.
 
 == Object Free Lists ==
 
