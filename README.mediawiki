@@ -220,7 +220,7 @@ The collection should only need to stop the world during marking and should be a
 
 When enabled with threading support, 
 SMAL attempts to use many smaller mutex and read/write lock regions to avoid long or global locks.  
-There is a single allocation read/write lock that is held to allow disabling of allocation of each buffer before collection starts.
+There is a single allocation read/write lock that is held to allow disabling of allocation from each buffer before collection starts.
 The multi-thread version is approx. 2 to 3 times slower single-thread version, when running only one thread.
 
 == Object Enumeration ==
