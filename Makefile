@@ -49,8 +49,8 @@ T_LIBS := $(LIBS_THREAD) #
 
 all : $(SRC_LIB) $(TESTS_T)
 
-src/smal.s : src/smal.c $(H_FILES)
-	$(CC) $(CFLAGS:-g=) -DNASSERT=1 -S -o $@ $<
+src/smal.s : src/smal.c $(H_FILES) Makefile
+	$(CC) $(CFLAGS:-g=) -DNASSERT=1 -S -fverbose-asm -o $@ $<
 
 src/hash/voidP_voidP_Table.o : src/hash/*.c src/hash/*.h src/hash/*.def
 src/hash/voidP_Table.o : src/hash/*.c src/hash/*.h src/hash/*.def
