@@ -66,9 +66,11 @@ void write_fault(int sig, siginfo_t *si, void *something)
   void *addr;
 
   /* Sometimes si_addr is 0? */
-  addr = si->si_addr; 
+  addr = si->si_addr;
+#if 0
   if ( ! addr )
     addr = si->si_ptr; /* si_ptr? */
+#endif
 
   result = smal_write_barrier_mutation(addr, sig);
 

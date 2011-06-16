@@ -33,10 +33,16 @@ void write_fault(int sig, siginfo_t *si, void *something)
 
   write_fault_signal = sig;
   memcpy((void*) &write_fault_si, &si, sizeof(write_fault_si));
+
+  fprintf(stderr, "si_addr = %p\n", si->si_addr);
+  fprintf(stderr, "si_ptr  = %p\n", si->si_ptr);
+
   write_fault_something = something;
   write_fault_addr = si->si_addr;
   if ( ! write_fault_addr )
     write_fault_addr = si->si_ptr;
+
+  fprintf(stderr, "  write_fault_addr = %p\n", write_fault_addr);
   result = mprotect(mp_addr, mp_size, PROT_READ | PROT_WRITE);
   assert(result == 0);
 
@@ -76,11 +82,7 @@ int main(int argc, char **argv)
   fprintf(stderr, "mp_addr = %p\n", mp_addr);
   *((void**) mp_addr) = 0;
   assert(write_fault_signal != 0);
-  fprintf(stderr, "si_ptr  = %p\n", write_fault_si.si_ptr);
-  fprintf(stderr, "si_addr = %p\n", write_fault_si.si_addr);
- 
-  assert(write_fault_si.si_ptr == mp_addr || 
-	 write_fault_si.si_addr == mp_addr); /* WHICH ONE!?!? */
+  assert(write_fault_addr == mp_addr);
 
   fprintf(stderr, "\n%s OK\n", argv[0]);
 
