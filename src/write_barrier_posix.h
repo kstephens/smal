@@ -74,6 +74,7 @@ void write_fault(int sig, siginfo_t *si, void *something)
 
   result = smal_write_barrier_mutation(addr, sig);
 
+#if 0
   smal_get_sig_info(sig, si, something);
   fprintf(stderr, "  write_fault %d (%s) si_code %d (%s) at si_ptr @%p si_addr @%p addr @%p => %d\n", 
 	  sig, sig_name, 
@@ -81,6 +82,7 @@ void write_fault(int sig, siginfo_t *si, void *something)
 	  si->si_ptr, si->si_addr,
 	  addr,
 	  result);
+#endif
 
   errno = errno_save;
   if ( ! result ) {
