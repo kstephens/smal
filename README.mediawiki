@@ -22,7 +22,7 @@ It does, however, optionally support:
 * Weak references.
 * Reference queues.
 * Finalizers.
-* Remembered Sets for Mostly Unchanging Buffers.
+* Remembered Sets for Mostly Unchanging Object. (See below).
 
 == Main API ==
 
@@ -49,7 +49,7 @@ It does, however, optionally support:
 Each <code>smal_page</code> is allocated from the OS via <code>mmap()</code> and is ensured to be aligned to <code>smal_page_size</code>.
 The reasons for this aggressive alignment are discussed below.
 This is achieved by attempting to allocate <code>smal_page_size</code> bytes using <code>MAP_ANON</code> <code>mmap()</code>.  
-If this buffer not aligned, SMAL <code>munmap()</code>s the attempted buffer and <code>mmap()</code>s <code>smal_page_size * 2</code> bytes and subsequently <code>munmap()</code>s the unaligned portion. 
+If this buffer not aligned, SMAL <code>munmap()</code>s the attempted buffer and <code>mmap()</code>s <code>smal_page_size * 2</code> bytes and subsequently <code>munmap()</code>s the unaligned portion(s). 
 
 == Buffer Allocation ==
 
@@ -59,7 +59,7 @@ SMAL support two <code>smal_buffer</code> allocation options:
 * Allocate a <code>smal_buffer</code> structure using <code>malloc()</code> and store a pointer to it in the first word of the page.
 
 The former has better performance, since mapping between <code>smal_page*</code> and <code>smal_buffer*</code>, but bookeeping operations will dirty memory during allocation and collection.  This can cause unnessary copy-on-write effort in forked processes.
-The latter avoids page mutations during allocation and collections but has an addtional pointer dereference when mapping <code>smal_page*<code> pointers to <code>smal_buffer*<code> pointers.
+The latter avoids page mutations during allocation and collections but has an addtional pointer dereference when mapping <code>smal_page*</code> pointers to <code>smal_buffer*</code> pointers.
 
 == Object Allocation ==
 
@@ -166,7 +166,7 @@ SMAL supports designating a <code>smal_type</code> as containing mostly unchangi
 
 == Sweep Frequency ==
 
-Types can be created that will sweep objects only every N collections.  This should only be used for object types that are unlikely to ever become unreferenced during normal collection lifecycles.  This can be use in conjuntion with "Mostly Unchanging Objects" feature.
+Types can be created that will sweep objects only every N collections.  This should only be used for object types that are unlikely to ever become unreferenced during normal collection lifecycles.  This can be used in conjuntion with "Mostly Unchanging Objects" feature.
 
 == Write Barrier ==
 
