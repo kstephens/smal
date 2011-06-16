@@ -12,6 +12,7 @@ It is designed to be as minimal, performant and modular as possible.
 * It has no default root marking policy.
 * Is neither conservative, nor type-safe; users can configure it for both scenarios.
 * It should work in co-operation with any <code>malloc()</code>/<code>free()</code> implementation.
+* Most advanced options are supported on Linux and OS X.
 
 It does, however, optionally support:
 
@@ -160,7 +161,7 @@ The algorithms/data structures are as follows:
 
 == Mostly Unchanging Objects ==
 
-SMAL supports designating a <code>smal_type</code> as containing mostly unchanging objects.  The smal_buffers for these objects are tracked for mutations and can be scanned for pointers less frequently by keeping a remembered set of references pointing outside itself.   NOT FULLY IMPLEMENTED, YET.
+SMAL supports designating a <code>smal_type</code> as containing mostly unchanging objects.  The smal_buffers for these objects are tracked for mutations using a write barrier per buffer and can be scanned for pointers less frequently by keeping a remembered set of references pointing outside itself.  This is functional on OS X and almost complete on Linux.
 
 == Sweep Frequency ==
 
@@ -168,7 +169,7 @@ Types can be created that will sweep objects only every N collections.  This sho
 
 == Write Barrier ==
 
-SMAL implements a write barrier to determine if a <code>smal_buffer</code> has been mutated since last collection.  This is used to invalidate remembered sets within a buffer.
+SMAL implements a write barrier to determine if a <code>smal_buffer</code> has been mutated since last collection.  This is used to invalidate remembered sets within a buffer.  Write barrier uses <code>mprotect</code>.  Write barrier faults are trapped with POSIX <code>sigaction</code> on Linux and Mach exception ports on OS X.
 
 == Co-operation and Dependency ==
 
@@ -207,8 +208,10 @@ See include/smal/thread.h for more info.
 The rest of the SMAL allocator is not completely thread-safe, yet.
 SMAL does not yet have portable mechanisms to:
 
-* discover all stop all threads, 
-* collect their stacks, roots and registers.
+* discover all active threads,
+* pause all threads, 
+* collect their stacks, roots and registers,
+* resume all threads.
 
 The collection should only need to stop the world during marking and should be able to allow allocation in other threads to continue while sweeping objects, at the expense of allocating additional pages until sweeping is complete.  Alternately, in a "single" thread environment, the sweep phase could be executed in a dedicated thread.  These features are not fully implemented.  
 
