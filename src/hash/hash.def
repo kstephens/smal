@@ -20,13 +20,13 @@
 #error "you must define HASH_KEY to a type"
 #endif
 #ifndef HASH_KEY_SET
-#define HASH_KEY_SET(X,Y) X = Y
+#define HASH_KEY_SET(X,Y) (X) = (Y)
 #endif
 #ifndef HASH_KEY_FREE
 #define HASH_KEY_FREE(X)
 #endif
 #ifndef HASH_KEY_EQUAL
-#define HASH_KEY_EQUAL(X,Y) (X)=(Y)
+#define HASH_KEY_EQUAL(X,Y) ((X)==(Y))
 #endif
 #ifndef HASH_KEY_HASH
 #error "you must define HASH_KEY_HASH(X) to a function that returns a HASH_VAL such that if HASH_KEY_EQUAL(X,Y) then HASH_KEY_HASH(X) == HASH_KEY_HASH(Y)"
