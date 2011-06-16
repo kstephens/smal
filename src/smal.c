@@ -91,9 +91,11 @@ void smal_debug_set_level(smal_debug_t dt, int value)
 void smal_debug_print_smaps()
 {
 #ifdef __linux__
+  int result;
   char cmd[1024];
   sprintf(cmd, "grep -B 1 Size: /proc/%d/smaps", (int) getpid());
-  system(cmd);
+  result = system(cmd);
+  (void) result;
 #endif
 }
 
