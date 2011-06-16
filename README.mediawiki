@@ -114,7 +114,7 @@ This operation takes 8 x86 instructions.
 
 === Issues ===
 
-* SMAL cannot service allocations larger than <code>smal_page_size - sizeof(smal_buffer) - object_alignment</code> or <code>smal_page_size - sizeof(void*) - object_alignment<code>, depending on the configuration.
+* SMAL cannot service allocations larger than <code>smal_page_size - sizeof(smal_buffer) - object_alignment</code> or <code>smal_page_size - sizeof(void*) - object_alignment</code>, depending on the configuration.
 * The <code>page_id</code> hash table may become large and sparse when <code>mmap()</code> tends to not allocate <code>smal_buffer</code>s in a mostly-contigious fashion -- other active allocators (e.g.: <code>malloc()</code>) may cause holes in the address space consumed by SMAL.
 
 == Object Mark/Free Bits ==
