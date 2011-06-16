@@ -163,15 +163,13 @@ HASH_EXTERN HASH(TableEntry) ** HASH(TableSearch) ( HASH(Table) *ht, HASH_KEY _k
 	HASH(TableEntry) *ee = *e;
 	*e = ee->_next;
 	HASH_WRITE_BARRIER(e);
-	ee->_next = ht->_entries[i];
-	HASH_WRITE_BARRIER(ee);
-	ht->_entries[i] = ee;
-	HASH_WRITE_BARRIER(ht->entries);
 	e = &(ht->_entries[i]);
-	HASH_WRITE_BARRIER(e);
+	ee->_next = *e;
+	HASH_WRITE_BARRIER(ee);
+	*e = ee;
+	HASH_WRITE_BARRIER(ht->entries);
       }
 #endif
-
       return e;
     }
     e = &((*e)->_next);
@@ -184,6 +182,9 @@ HASH_EXTERN HASH(TableEntry) ** HASH(TableSearch) ( HASH(Table) *ht, HASH_KEY _k
 HASH_EXTERN void HASH(TableAddEntry) ( HASH(Table) *ht, HASH(TableEntry) *e )
 {
   unsigned int i = ((unsigned int) HASH_ENTRY_HASH(e)) % HASH_TABLE_SIZE(ht);
+#if HASH_CACHE
+  ht->_cache = 0;
+#endif
 #if HASH_TABLE_COLLISIONS != 0
   if ( ht->_entries[i] )
     ht->_collisions ++;
@@ -248,7 +249,7 @@ HASH_EXTERN size_t HASH(TableNEntries) ( HASH(Table) *ht )
     HASH(TableEntry) *e;
 
     for ( e = ht->_entries[i]; e; e = e->_next ) {
-      tne ++;
+      ++ tne;
     }
   }
 
