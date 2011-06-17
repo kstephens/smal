@@ -6,8 +6,8 @@
 #include "smal/smal.h"
 #include "smal/thread.h"
 #include "smal/dllist.h"
+#include "smal/assert.h"
 
-#include <assert.h>
 #include <stdlib.h> /* malloc(), free() */
 #include <string.h> /* memset() */
 #include <stdio.h>

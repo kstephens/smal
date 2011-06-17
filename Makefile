@@ -13,8 +13,9 @@ CFLAGS_PROF = #
 endif
 ifeq ($(ENABLE_ASSERT),0)
 CFLAGS_ASSERT += -DNASSERT=1 #
+CFLAGS_ASSERT += -DSMAL_NASSERT=1 #
 else
-CFLAGS_ASSERT += -Dsmal_ASSERT=1
+CFLAGS_ASSERT += -DSMAL_ASSERT=1 #
 CFLAGS_ASSERT += #
 endif
 ifneq ($(ENABLE_DEBUG),)
@@ -50,7 +51,7 @@ T_LIBS := $(LIBS_THREAD) #
 all : $(SRC_LIB) $(TESTS_T)
 
 src/smal.s : src/smal.c $(H_FILES) Makefile
-	$(CC) $(CFLAGS:-g=) -DNASSERT=1 -S -fverbose-asm -Wa,-a,-ad -v -o $@ $<
+	$(CC) $(CFLAGS:-g=) -DSMAL_NASSERT=1 -DNASSERT=1 -DSMAL_DEBUG=0 -S -fverbose-asm -Wa,-a,-ad -v -o $@ $<
 
 src/hash/voidP_voidP_Table.o : src/hash/*.c src/hash/*.h src/hash/*.def
 src/hash/voidP_Table.o : src/hash/*.c src/hash/*.h src/hash/*.def

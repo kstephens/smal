@@ -6,12 +6,14 @@ static void exn_init();
 void smal_write_barrier_init_os();
 #endif
 
+static inline
 void smal_write_barrier_init()
 {
   smal_write_barrier_init_os();
 }
 
-static int smal_mprotect(smal_buffer *self, void *addr, size_t size, int prot)
+static inline
+int smal_mprotect(smal_buffer *self, void *addr, size_t size, int prot)
 {
   int result = mprotect(addr, size, prot);
   smal_debug(mprotect, 2, " b@%p mprotect(@%p, 0x%lx, %d) = %d (%s)", self, (void*) addr, (unsigned long) size, (unsigned int) prot, result, strerror(errno));
@@ -20,6 +22,7 @@ static int smal_mprotect(smal_buffer *self, void *addr, size_t size, int prot)
   return result;
 }
 
+static inline
 void smal_buffer_write_protect(smal_buffer *self)
 {
 #if defined(__APPLE__) || defined(__linux__)
@@ -52,6 +55,7 @@ void smal_buffer_write_protect(smal_buffer *self)
   smal_thread_rwlock_unlock(&self->write_protect_lock);
 }
 
+static inline
 void smal_buffer_write_unprotect_force(smal_buffer *self)
 {
   if ( self->write_protect_size ) {
@@ -62,6 +66,7 @@ void smal_buffer_write_unprotect_force(smal_buffer *self)
   }
 }
 
+static inline
 void smal_buffer_write_unprotect(smal_buffer *self)
 {
   smal_thread_rwlock_wrlock(&self->write_protect_lock);
@@ -70,6 +75,7 @@ void smal_buffer_write_unprotect(smal_buffer *self)
   smal_thread_rwlock_unlock(&self->write_protect_lock);
 }
 
+static inline
 int smal_write_barrier_mutation(void *addr, int code)
 {
   smal_buffer *self = smal_addr_to_buffer(addr);
@@ -104,6 +110,7 @@ int smal_write_barrier_mutation(void *addr, int code)
   return 0; /* NOT OK */
 }
 
+static inline
 void smal_buffer_clear_mutation(smal_buffer *self)
 {
   smal_thread_rwlock_wrlock(&self->mutation_lock);
@@ -113,6 +120,7 @@ void smal_buffer_clear_mutation(smal_buffer *self)
     smal_buffer_write_protect(self);
 }
 
+static inline
 void smal_buffer_assume_mutation(smal_buffer *self)
 {
   smal_thread_rwlock_wrlock(&self->mutation_lock);

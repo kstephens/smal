@@ -18,10 +18,10 @@
 #define malloc(x) ({ size_t size = (x); void *ptr = malloc(size); fprintf(stderr, "  SMAL_PROF: %s:%-4d: malloc(%lu) = %p\n", __FILE__, __LINE__, (unsigned long) size, ptr); ptr; })
 #define free(x) fprintf(stderr, "  SMAL_PROF: %s:%-4d: free(%p) ignored\n", __FILE__, __LINE__, (x))
 #endif
-#include <assert.h>
 #include "smal/smal.h"
 #include "smal/dllist.h"
 #include "smal/thread.h"
+#include "smal/assert.h"
 
 
 static int initialized;
@@ -428,7 +428,7 @@ void smal_buffer_table_add(smal_buffer *self)
   smal_debug(all, 3, "buffer_table_size = %d", (int) buffer_table_size);
 }
 
-static
+static inline
 void smal_buffer_table_remove(smal_buffer *self)
 {
   size_t i;
@@ -458,7 +458,7 @@ void smal_buffer_table_remove(smal_buffer *self)
 }
 
 
-static
+static inline
 int smal_buffer_set_object_size(smal_buffer *self, size_t object_size);
 
 
@@ -466,7 +466,7 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size);
 void smal_buffer_write_unprotect(smal_buffer *);
 #endif
 
-static
+static inline
 smal_buffer *smal_buffer_alloc(smal_type *type)
 {
   smal_buffer *self;
@@ -619,7 +619,7 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
   return self;
 }
 
-static
+static inline
 int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
 {
   int result = 0;
@@ -693,19 +693,19 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
   return result;
 }
 
-static
+static inline
 void smal_buffer_pause_allocations(smal_buffer *self)
 {
   smal_thread_lock_lock(&self->alloc_disabled);
 }
 
-static
+static inline
 void smal_buffer_resume_allocations(smal_buffer *self)
 {
   smal_thread_lock_unlock(&self->alloc_disabled);
 }
 
-static
+static inline
 void smal_buffer_stop_allocations(smal_buffer *self)
 {
   smal_thread_mutex_lock(&self->type->alloc_buffer_mutex);
@@ -714,7 +714,7 @@ void smal_buffer_stop_allocations(smal_buffer *self)
   smal_thread_mutex_unlock(&self->type->alloc_buffer_mutex);
 }
 
-static 
+static inline
 void smal_buffer_free(smal_buffer *self)
 {
   int result;
@@ -938,6 +938,7 @@ int smal_object_reachableQ(void *ptr)
     return 0;
 }
 
+static inline
 void *smal_buffer_alloc_object(smal_buffer *self)
 {
   void *ptr;

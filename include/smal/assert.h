@@ -5,12 +5,21 @@
 #ifdef NASSERT
 #undef NASSERT
 #endif
-#ifdef smal_NASSERT
-#undef smal_NASSERT
+#ifdef SMAL_NASSERT
+#undef SMAL_NASSERT
 #endif
 #endif
 
-#if NASSERT || smal_NASSERT
+#ifdef SMAL_NASSERT
+#undef  NASSERT
+#define NASSERT 1
+#undef  NDEBUG
+#define NDEBUG 1
+#endif
+
+#include <assert.h>
+
+#if NASSERT
 #define smal_assert(EXPR, TEST)	(EXPR)
 #else
 #define smal_assert(EXPR, TEST)						\
