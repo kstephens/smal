@@ -246,6 +246,7 @@ class AssemblyCallGraph
     end
 
     attr_accessor :extern
+    alias :extern? :extern
     def extern!
       @extern = true
       self
@@ -290,7 +291,7 @@ class AssemblyCallGraph
 
     def to_s
       @to_s ||=
-        (@extern ? "EXTERN #{label}" : "%5d P { " % (@line || -1)) << "\n" <<
+        (extern? ? "EXTERN #{label}" : "%5d P { " % (@line || -1)) << "\n" <<
         (@regions.map{|x| x.to_s} * '' << "\n") <<
         "      } P"
     end
@@ -360,7 +361,7 @@ class AssemblyCallGraph
     end
   end
 
-  def to_dot obj = nil, out = nil
+  def to_dot obj = nil, out = nil, &blk
     obj ||= self
     out ||= $stdout
     case obj
@@ -380,27 +381,28 @@ digraph g {
   edge [
   ];
 END
-      to_dot_node(self, out)
-      to_dot_edge(self, out)
+      to_dot_node(self, out, &blk)
+      to_dot_edge(self, out, &blk)
       out.puts "\n}\n"
     else
       raise TypeError, "#{obj.class}"
     end
   end
 
-  def to_dot_node obj, out = nil
+  def to_dot_node obj, out = nil, &blk
     # $stderr.puts "  to_dot_node #{obj.class} #{obj.object_id} #{obj.label rescue nil}"
     case obj
     when AssemblyCallGraph
       obj.procedures.each do | x |
-        to_dot_node(x, out)
+        to_dot_node(x, out, &blk)
       end
 
     when Procedure
-      return if @dot_ids[obj]
-      dot_id = @dot_ids[obj] = "cluster_#{obj.label}"
+      return if block_given? && ! yield(obj)
+      return if @dot_ids[obj] or obj.extern?
+      dot_id = @dot_ids[obj] = "#{obj.label}"
       out.puts <<"END"
-subgraph "#{dot_id}" {
+subgraph "cluster_#{dot_id}" {
    style=filled;
    color=white;
 END
@@ -446,14 +448,15 @@ END
     end
   end
 
-  def to_dot_edge obj, out = nil
+  def to_dot_edge obj, out = nil, &blk
     case obj
     when AssemblyCallGraph
       obj.procedures.each do | p |
-        to_dot_edge(p, out)
+        to_dot_edge(p, out, &blk)
       end
 
     when Procedure
+      return if block_given? && ! yield(obj)
       obj.regions.each do | r |
         to_dot_edge(r, out)
       end
@@ -475,13 +478,13 @@ END
         end
       end
 
-    when Instruction::AbstractJump
+    when Instruction::AbstractJump, Instruction::Call
       src = @dot_ids[obj] or raise "no @dot_ids for #{obj}"
       if dst = @dot_ids[obj.dst_code]
         dst = "#{dst}:w"
         style = "style=dashed"
       else
-        dst = obj.dst_label
+        dst = "\"#{obj.owner.owner.label}::#{obj.dst_label}\""
         style = "style=dotted"
       end
       out.puts <<"END"
@@ -511,7 +514,9 @@ end
 puts "====================="
 s_dot_file = "#{s_file}.dot"
 File.open(s_dot_file, "w+") do | io |
-  acg.to_dot(nil, io)
+  acg.to_dot(nil, io) do | p |
+    [ :_smal_alloc, :_smal_alloc_p, :_smal_buffer_alloc_object, :_smal_type_alloc_buffer ].include?(p.label)
+  end
 end
 if true
   s_dot_svg_file = "#{s_dot_file}.svg"
