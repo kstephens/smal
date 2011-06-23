@@ -64,6 +64,7 @@ int main(int argc, char **argv)
 
   // _smal_debug_mark = 1;
   smal_collect();
+  smal_collect_wait_for_sweep();
   assert(finalizer_calls == 0);
   {
     smal_stats stats = { 0 };

@@ -157,7 +157,7 @@ void _smal_thread_init()
 void smal_thread_init()
 {
   if ( ! thread_inited ) { /* fast,unsafe lock */
-    (void) pthread_once(&_smal_thread_is_initialized, _smal_thread_init);
+    smal_assert(pthread_once(&_smal_thread_is_initialized, _smal_thread_init), == 0);
   }
 }
 
@@ -352,13 +352,22 @@ int smal_thread_mutex_unlock(smal_thread_mutex *mutex)
 #endif
 }
 
-
+void *smal_thread_join(smal_thread *t)
+{
+  void *value = 0;
+#if SMAL_PTHREAD
+  if ( t ) {
+    smal_assert(pthread_join(t->thread, value), == 0);
+  }
+#endif
+  return value;
+}
 
 void smal_thread_spawn_or_inline(void *(*func)(void *data), void *data)
 {
 #if SMAL_PTHREAD
   pthread_t child_thread;
-  pthread_create(&child_thread, 0, func, data);
+  smal_assert(pthread_create(&child_thread, 0, func, data), == 0);
 #else
   func(data);
 #endif

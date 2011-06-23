@@ -1208,7 +1208,7 @@ void smal_buffer_sweep(smal_buffer *self)
 }
 
 static
-void _smal_collect_sweep_buffers(void *arg);
+void *_smal_collect_sweep_buffers(void *arg);
 
 void _smal_collect_inner()
 {
@@ -1218,7 +1218,7 @@ void _smal_collect_inner()
 
   if ( no_collect || in_collect ) return;
 
-  smal_thread_lock_begin(&_smal_collect_inner_lock); {
+  if ( smal_thread_lock_lock(&_smal_collect_inner_lock) ) {
  
   smal_collect_before_mark();
 
@@ -1281,15 +1281,28 @@ void _smal_collect_inner()
   /* Begin sweep. */
   smal_collect_before_sweep();
 
+#if 0
+  smal_thread_spawn_or_inline(
+			      _smal_collect_sweep_buffers, 
+			      0);
+#else
   _smal_collect_sweep_buffers(0);
-  } smal_thread_lock_end(&_smal_collect_inner_lock); // FIXME?: Can _smal_collect_sweep_buffers continue in separate thread if this lock is released?
+#endif
+  }
 }
 
 static
-void _smal_collect_sweep_buffers(void *arg)
+void *sweep_thread;
+
+static
+void *_smal_collect_sweep_buffers(void *arg)
 {
   smal_buffer *buf;
 
+  // fprintf(stderr, "_smal_collect_sweep_buffers()\n");
+  sweep_thread = smal_thread_self(); // FAILS
+
+  // fprintf(stderr, "_smal_collect_sweep_buffers(): buffer_collecting_lock ++\n");
   smal_thread_rwlock_wrlock(&buffer_collecting_lock);
   ++ in_sweep;
 
@@ -1305,6 +1318,7 @@ void _smal_collect_sweep_buffers(void *arg)
 
   -- in_sweep;
   smal_thread_rwlock_unlock(&buffer_collecting_lock);
+  // fprintf(stderr, "_smal_collect_sweep_buffers(): buffer_collecting_lock --\n");
 
   -- in_collect;
 
@@ -1317,6 +1331,21 @@ void _smal_collect_sweep_buffers(void *arg)
 	     buffer_head.stats.free_n
 	    );
 
+  smal_thread_lock_unlock(&_smal_collect_inner_lock);
+
+  // fprintf(stderr, "_smal_collect_sweep_buffers(): DONE\n");
+  {
+    void *tmp = sweep_thread;
+    sweep_thread = 0;
+    smal_thread_died(tmp);
+  }
+
+  return 0;
+}
+
+void smal_collect_wait_for_sweep()
+{
+  smal_thread_join(sweep_thread);
 }
 
 

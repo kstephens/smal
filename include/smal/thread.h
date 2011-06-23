@@ -76,6 +76,7 @@ smal_thread *smal_thread_self();
 void smal_thread_died(smal_thread *t); //
 int smal_thread_getstack(smal_thread *t, void **addrp, size_t *sizep);
 int smal_thread_each(int (*func)(smal_thread *t, void *arg), void *arg);
+void *smal_thread_join(smal_thread *t);
 
 int smal_thread_mutex_init(smal_thread_mutex *m);
 int smal_thread_mutex_destroy(smal_thread_mutex *m);
