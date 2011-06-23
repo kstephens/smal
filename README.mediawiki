@@ -18,7 +18,7 @@ It does, however, optionally support:
 
 * Threads.
 * Explicit, exact root declarations of globals and stack variables.
-* Implicit, conservative root scanning of stack variables.
+* Implicit, conservative root scanning of stack variables and register sets.
 * Weak references.
 * Reference queues.
 * Finalizers.
