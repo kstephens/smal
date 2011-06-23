@@ -1,0 +1,415 @@
+#!/usr/bin/env ruby
+# -*- ruby -*-
+
+class AssemblyCallGraph
+  attr_accessor :codes, :codes_by_label
+
+  def initialize
+    @codes = [ ]
+    @obj_by_label = { }
+  end
+
+  def parse input = nil
+    input ||= $stdin
+    @code = nil
+    @line = 0
+    @queued_labels = [ ]
+    until input.eof?
+      line = input.readline
+      @line += 1
+      isn = label = opcode = l = dst_label = nil
+      case line
+      when /^\s*#/
+      when /^\s*$/
+      when /^\s*\.([a-z_]+)/i
+      when /^([a-z0-9_.$]+):/i
+        l = $1.to_sym
+        isn = Instruction::Label.new
+        label = isn
+      when /^\s*(jmp)\s+([a-z0-9_]+)/i
+        opcode, dst_label = $1, $2.to_sym
+        isn = Instruction::Jump.new
+      when /^\s*(call)\s+([a-z0-9_]+)/i
+        opcode, dst_label = $1, $2.to_sym
+        isn = Instruction::Call.new
+      when /^\s*(j[a-z0-9]+)\s+([a-z0-9_]+)/i
+        opcode, dst_label = $1, $2.to_sym
+        isn = Instruction::Branch.new
+        @next_branch_isn = isn
+      else
+        isn = Instruction.new
+      end
+
+      if isn
+        isn.context = self
+        isn.line = @line
+        isn.isn = line
+        isn.label = l if l
+        isn.dst_label = dst_label if dst_label
+        add_isn(isn)
+      end
+    end
+    @line = -1
+    self
+  end
+
+  def add_isn isn
+    # pp [ :add_isn, isn ]
+
+    # Queue all labels until real instruction.
+    case isn
+    when Instruction::Label
+      @queued_labels << isn
+      # isn.global?; pp [ :@labels, @labels ]
+    else
+      unless @queued_labels.empty?
+        # If there is a global label?
+        # emit a new Code object.
+        if @queued_labels.find{|x| x.global?}
+          # pp [ :emit_new_code_for, @labels, isn ]
+          @code = nil
+        end
+        @queued_labels.each do | label |
+          _add_isn(label)
+        end
+        @queued_labels.clear
+      end
+
+      _add_isn(isn)
+      
+      @branch_isn = @next_branch_isn
+      @next_branch_isn = nil
+
+=begin
+      if Instruction::Branch === @branch_isn
+        @branch_isn.false_code = code
+        @branch_isn = nil
+      end
+=end
+    end
+
+    isn
+  end
+
+  def _add_isn isn
+    @code ||= add_code(Code.new)
+    @code.add_isn(isn)
+    isn
+  end
+  
+  def add_code code
+    code.context = self
+    code.line = @line
+    @codes << code
+    code
+  end
+  
+  def add_label! label, obj
+    raise TypeError unless Symbol === label
+    @obj_by_label[label] = obj
+    # $stderr.puts "add_label!(#{label}, #{obj.class} #{obj.object_id} #{obj.to_s})"
+    self
+  end
+
+  def resolve_label label
+    @obj_by_label[label] or 
+      add_code(Code.new).add_label!(label).extern!
+  end
+
+  def prepare_codes!
+    prev_code = nil
+    @codes.each do | code |
+      if code.extern?
+        prev
+      else
+      end
+    end
+  end
+
+  module Labels
+    def _add_label! label
+      raise TypeError unless Symbol === label
+      case
+      when @labels.empty?
+        @labels << label
+      when @labels.first.to_s =~ /^_/
+        @labels << label
+      when label.to_s =~ /^_/
+        @labels.unshift label
+      else
+        @labels << label
+      end
+      self
+    end
+    
+    def add_label! label
+      _add_label! label
+      context.add_label!(label, self)
+      self
+    end
+    
+    def label
+      @labels.first
+    end
+    
+    def global?
+      (@globalQ ||= [
+                     label.to_s =~ /^_/
+                    ]).first
+    end
+  end
+  
+  class Code
+    attr_accessor :context, :file, :line
+    attr_reader :lines, :labels, :isns
+    attr_accessor :extern
+    attr_accessor :prev, :next
+
+    include Labels
+
+    def initialize
+      @queued_labels = [ ]
+      @labels = [ ]
+      @lines = [ ]
+      @isns = [ ]
+    end
+
+    def extern!
+      @extern = true
+      self
+    end
+
+    def empty?
+      @isns.empty?
+    end
+
+    attr_reader :has_non_label
+
+    def add_isn isn
+      @lines << isn
+      isn.owner = self
+      isn.context ||= self.context
+      case isn
+      when Instruction::Label
+        @queued_labels << isn
+      else
+        unless @has_non_label
+          @queued_labels.each do | label |
+            _add_label!(label.label)
+          end
+        end
+        @queued_labels.each do | label |
+          isn.add_label!(label.label)
+        end
+        @queued_labels.clear
+
+        @isns << isn
+        @has_non_label = true 
+      end
+      isn
+    end
+
+    def first_isn
+      @first_isn ||= 
+        @extern ? self : (@isns.first || self)
+    end
+
+    def to_s
+      @to_s ||=
+        (@extern ? "EXTERN " : "%5d { " % @line) << "\n" <<
+        (@lines.map{|x| x.to_s} * '' << "\n") <<
+        "      }"
+    end
+  end
+
+  class Instruction
+    attr_accessor :context, :file, :line, :owner
+    attr_accessor :isn
+
+    include Labels
+    def initialize
+      @labels = [ ]
+    end
+
+    def to_s
+      @to_s ||=
+        (
+         ("%5d " % @line) <<
+         @isn
+         ).freeze
+    end
+
+    def first_isn
+      self
+    end
+
+    class Label < self
+      attr_accessor :label
+    end
+
+    class Jump < self
+      attr_accessor :dst_label, :dst_code
+      def dst_code
+        @dst_code ||= @dst_label && context.resolve_label(@dst_label)
+      end
+      def dst_label
+        @dst_label ||= @dst_code && @dst_code.label
+      end
+      def dst_code_isn
+        @dst_code_isn ||= dst_code.first_isn
+      end
+
+      def to_s
+        @to_s ||= 
+          super.sub("\n", " # line #{dst_code.first_isn.line}\n")
+      end
+    end
+
+    class Call < Jump
+    end
+
+    class Branch < Jump
+      alias :true_label :dst_label
+      alias :true_label= :dst_label=
+      alias :true_code :dst_code
+      alias :true_code= :dst_code=
+
+      attr_accessor :false_label, :false_code
+      def false_code
+        @false_code ||= @false_label && context.resolve_label(@false_label)
+      end
+      def false_label
+        @false_label ||= @false_code && @false_code.label
+      end
+
+    end
+  end
+
+  def to_dot obj = nil, out = nil
+    obj ||= self
+    out ||= $stdout
+    case obj
+    when AssemblyCallGraph
+      @dot_ids ||= { }
+      out.puts <<"END"
+digraph g {
+  graph [
+    rankdir = "LR"
+    // rankdir = "TB" // Error: Edge length 94897.000000 larger than maximum 65535 allowed.
+  ];
+  node [
+    fontsize = "10"
+    // fontstyle = ""
+    shape = "ellipse"
+  ];
+  edge [
+  ];
+END
+      to_dot_node(self, out)
+      to_dot_edge(self, out)
+      out.puts "\n}\n"
+    else
+      raise TypeError, "#{obj.class}"
+    end
+  end
+
+  def to_dot_node obj, out = nil
+    case obj
+    when Instruction::Label
+      nil
+
+    when Instruction
+      obj.to_s.
+        sub(/\s*\n/, '').
+        gsub(/\t/, '    ').
+        gsub(/[\{\}\|\s\<\>]/) do | m |
+        '\\' + m
+      end
+
+    when Code
+      return if @dot_ids[obj]
+      dot_id = @dot_ids[obj] = obj.label
+      dot_label = ''
+      dot_label << "<l0>#{obj.label}:\\l|"
+      obj.lines.each do | isn |
+        if field = to_dot_node(isn)
+          f = "l#{isn.line}"
+          @dot_ids[isn] ||= "\"#{dot_id}\":#{f}"
+          dot_label << "<#{f}>#{field}\\l|"
+        end
+      end
+      out.puts <<"END"
+"#{dot_id}" [
+  label = "#{dot_label}"
+  shape = "record"
+];
+END
+
+    when AssemblyCallGraph
+      obj.codes.each do | x |
+        to_dot_node(x, out) unless x.empty?
+      end
+    end
+  end
+
+  def to_dot_edge obj, out = nil
+    case obj
+    when Instruction::Jump
+      if dst = @dot_ids[obj.dst_code]
+        dst = "#{dst}:e"
+        style = nil
+      else
+        dst = obj.dst_label
+        style = "style=dotted"
+      end
+      out.puts <<"END"
+    #{@dot_ids[obj]}:e -> #{dst} [ #{style} ];
+END
+
+    when Code
+      obj.isns.each do | x |
+        to_dot_edge(x, out)
+      end
+      
+    when AssemblyCallGraph
+      prev_code = nil
+      obj.codes.each do | code |
+        to_dot_edge(code, out)
+=begin
+        if prev_code
+          out.puts <<"END"
+  "#{@dot_ids[prev_code]}" -> "#{@dot_ids[code]}" [ ];
+END
+        end
+        prev_code = code
+=end
+      end
+    end
+  end
+
+end # class
+
+
+require 'rubygems'
+gem 'ruby-debug'
+require 'ruby-debug'
+require 'pp'
+acg = AssemblyCallGraph.new
+s_file = "src/smal.s"
+File.open(s_file) do | io |
+  acg.parse(io)
+end
+acg.codes.each do | c |
+  puts c unless c.empty?
+end
+puts "====================="
+s_dot_file = "#{s_file}.dot"
+File.open(s_dot_file, "w+") do | io |
+  acg.to_dot(nil, io)
+end
+if true
+  s_dot_svg_file = "#{s_dot_file}.svg"
+  system("dot -Tsvg #{s_dot_file} > #{s_dot_svg_file}") and
+  system("open -a Firefox #{s_dot_svg_file}")
+end
+
