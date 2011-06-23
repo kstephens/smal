@@ -479,7 +479,7 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size);
 void smal_buffer_write_unprotect(smal_buffer *);
 #endif
 
-static inline
+static // inline
 smal_buffer *smal_buffer_alloc(smal_type *type)
 {
   smal_buffer *self;
@@ -951,7 +951,7 @@ int smal_object_reachableQ(void *ptr)
     return 0;
 }
 
-static inline
+static // inline
 void *smal_buffer_alloc_object(smal_buffer *self)
 {
   void *ptr;
