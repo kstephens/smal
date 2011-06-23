@@ -207,7 +207,7 @@ class AssemblyCallGraph
         end
         @queued_labels.clear
 
-        # Attach 
+        # Attach last isn from prev region to this instruction.
         if @isns.empty? and p_region = prev
           case last_isn = p_region.isns[-1]
           when Instruction::Jump, Instruction::Return
@@ -335,30 +335,16 @@ class AssemblyCallGraph
       end
     end
 
-    class AbstractCall < Flow
-    end
-
-    class Call < AbstractCall
-    end
-
+    class AbstractCall < Flow; end
+    class Call < AbstractCall; end
     class Return < AbstractCall
       def dst_code
         self
       end
     end
-
-    class AbstractJump < Flow
-    end
-
-    class Jump < AbstractJump
-    end
-
-    class Branch < AbstractJump
-      alias :true_label :dst_label
-      alias :true_label= :dst_label=
-      alias :true_code :dst_code
-      alias :true_code= :dst_code=
-    end
+    class AbstractJump < Flow; end
+    class Jump < AbstractJump; end
+    class Branch < AbstractJump; end
   end
 
   def to_dot obj = nil, out = nil, &blk
