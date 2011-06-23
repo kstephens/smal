@@ -225,8 +225,7 @@ static smal_buffer_list_head buffer_collecting;
 static smal_thread_rwlock buffer_collecting_lock;
 
 static size_t page_id_min, page_id_max;
-static smal_thread_mutex page_id_min_max_mutex;
-static smal_thread_lock page_id_min_max_keep;
+static int page_id_min_max_valid;
 
 static smal_buffer *buffer_table_init[] = { 0 };
 static smal_buffer **buffer_table = buffer_table_init;
@@ -374,11 +373,17 @@ void smal_buffer_table_add(smal_buffer *self)
   
   // fprintf(stderr, "smal_buffer_table_add(%p)\n", self);
 
-  /* Recompute page_id_min, page_id_max */
-  smal_thread_mutex_lock(&page_id_min_max_mutex);
+  smal_thread_rwlock_wrlock(&buffer_table_lock);
 
-  /* page_id_min and page_id_max is stale. */
-  if ( page_id_min == 0 && page_id_max == 0 ) {
+  /* Recompute page_id_min, page_id_max */
+  if ( page_id_min_max_valid ) {
+    /* page_id_min and page_id_max needs updating. */
+    if ( page_id_min > smal_buffer_page_id(self) )
+      page_id_min = smal_buffer_page_id(self);
+    else if ( page_id_max < smal_buffer_page_id(self) )
+      page_id_max = smal_buffer_page_id(self);
+  } else {
+    /* page_id_min and page_id_max is completely stale. */
     smal_buffer *buf;
     page_id_min = page_id_max = smal_buffer_page_id(self);
     assert(page_id_min != 0);
@@ -391,16 +396,10 @@ void smal_buffer_table_add(smal_buffer *self)
 	page_id_max = smal_buffer_page_id(buf);
     } smal_dllist_each_end();
     smal_thread_rwlock_unlock(&buffer_head_lock);
-  } else {
-    if ( page_id_min > smal_buffer_page_id(self) )
-      page_id_min = smal_buffer_page_id(self);
-    else if ( page_id_max < smal_buffer_page_id(self) )
-      page_id_max = smal_buffer_page_id(self);
+    page_id_min_max_valid = 1;
   }
 
   buffer_table_size_new = (page_id_max - page_id_min) + 1;
-
-  smal_thread_mutex_unlock(&page_id_min_max_mutex);
 
   buffer_table_new = malloc(sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1));
   memset(buffer_table_new, 0, sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1));
@@ -409,8 +408,6 @@ void smal_buffer_table_add(smal_buffer *self)
   fprintf(stderr, "smal_buffer_table_add(%p): malloc([%lu]) = %p\n", self, (unsigned long) buffer_table_size_new, buffer_table_new);
   fprintf(stderr, "  %lu page_id %lu @ %p [%lu, %lu] %lu\n", (unsigned long) buffer_head.stats.buffer_n, (unsigned long) self->page_id, self, (unsigned long) page_id_min, (unsigned long) page_id_max, (unsigned long) buffer_table_size_new);
 #endif
-
-  smal_thread_rwlock_wrlock(&buffer_table_lock);
 
   if ( smal_likely(buffer_table) ) {
     for ( i = 0; i < buffer_table_size; ++ i ) {
@@ -449,27 +446,23 @@ void smal_buffer_table_remove(smal_buffer *self)
   size_t i;
 
   smal_thread_rwlock_wrlock(&buffer_table_lock);
+
   i = smal_buffer_page_id(self) % buffer_table_size;
   assert(buffer_table[i] == self);
   buffer_table[i] = 0;
+
+  /* Was buffer at beginning or end of buffer id space? */
+  if ( smal_unlikely(page_id_min == self->page_id) || 
+       smal_unlikely(page_id_max == self->page_id) ) {
+    page_id_min_max_valid = 0;
+  }
+
   smal_thread_rwlock_unlock(&buffer_table_lock);
 
   // smal_thread_rwlock_wrlock(&buffer_head_lock);
   smal_dllist_delete(self); /* Remove from global buffer list. */
   // smal_buffer_print_all(self, "remove");
-
   // smal_thread_rwlock_unlock(&buffer_head_lock);
-
-  /* Check for lock during collect. */
-  if ( ! smal_thread_lock_test(&page_id_min_max_keep) ) {  
-    /* Adjust buffer_table window. */
-    smal_thread_mutex_lock(&page_id_min_max_mutex);
-    /* Was buffer at beginning or end of buffer id space? */
-    if ( smal_unlikely(page_id_min == self->page_id || page_id_max == self->page_id) ) {
-      page_id_min = page_id_max = 0;
-    }
-    smal_thread_mutex_unlock(&page_id_min_max_mutex);
-  }
 }
 
 static inline
@@ -1214,6 +1207,9 @@ void smal_buffer_sweep(smal_buffer *self)
   }
 }
 
+static
+void _smal_collect_sweep_buffers(void *arg);
+
 void _smal_collect_inner()
 {
   smal_buffer *buf;
@@ -1236,9 +1232,6 @@ void _smal_collect_inner()
   ++ collect_id;
 
   ++ buffer_head.stats.collection_n;
-
-  /* Prevent invalidating page_id min, max. */
-  smal_thread_lock_lock(&page_id_min_max_keep);
 
   smal_thread_rwlock_wrlock(&buffer_head_lock);
   smal_thread_rwlock_wrlock(&buffer_collecting_lock);
@@ -1288,6 +1281,15 @@ void _smal_collect_inner()
   /* Begin sweep. */
   smal_collect_before_sweep();
 
+  _smal_collect_sweep_buffers(0);
+  } smal_thread_lock_end(&_smal_collect_inner_lock); // FIXME?: Can _smal_collect_sweep_buffers continue in separate thread if this lock is released?
+}
+
+static
+void _smal_collect_sweep_buffers(void *arg)
+{
+  smal_buffer *buf;
+
   smal_thread_rwlock_wrlock(&buffer_collecting_lock);
   ++ in_sweep;
 
@@ -1304,9 +1306,6 @@ void _smal_collect_inner()
   -- in_sweep;
   smal_thread_rwlock_unlock(&buffer_collecting_lock);
 
-  /* Allow invalidation of page_id min, max. */
-  smal_thread_lock_unlock(&page_id_min_max_keep);
-
   -- in_collect;
 
   smal_collect_after_sweep();
@@ -1318,8 +1317,8 @@ void _smal_collect_inner()
 	     buffer_head.stats.free_n
 	    );
 
-  } smal_thread_lock_end(&_smal_collect_inner_lock);
 }
+
 
 /**********************************************/
 
@@ -1638,10 +1637,8 @@ static void _initialize()
   smal_thread_rwlock_init(&buffer_head_lock);
   smal_thread_mutex_init(&buffer_head.stats._mutex);
   smal_thread_rwlock_init(&buffer_collecting_lock);
-  smal_thread_mutex_init(&page_id_min_max_mutex);
   smal_thread_rwlock_init(&buffer_table_lock);
 
-  smal_thread_lock_init(&page_id_min_max_keep);
   smal_thread_lock_init(&_smal_collect_inner_lock);
 
   smal_dllist_init(&buffer_head);
@@ -1649,6 +1646,7 @@ static void _initialize()
   smal_dllist_init(&type_head);
 
   page_id_min = 0; page_id_max = 0;
+  page_id_min_max_valid = 0;
   buffer_table_size = 1;
   buffer_table =   malloc(sizeof(buffer_table[0]) * buffer_table_size);
   memset(buffer_table, 0, sizeof(buffer_table[0]) * buffer_table_size);
