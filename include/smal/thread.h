@@ -165,4 +165,8 @@ typedef struct smal_thread_lock {
 #define smal_thread_lock_begin(LOCK)  do { if ( ! smal_thread_lock_lock(LOCK) ) {
 #define smal_thread_lock_end(LOCK)    smal_thread_lock_unlock(LOCK); } } while ( 0 )
 
+/******************************************************/
+
+void smal_thread_spawn_or_inline(void *(*func)(void *data), void *data);
+
 #endif

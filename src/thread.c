@@ -353,3 +353,14 @@ int smal_thread_mutex_unlock(smal_thread_mutex *mutex)
 }
 
 
+
+void smal_thread_spawn_or_inline(void *(*func)(void *data), void *data)
+{
+#if SMAL_PTHREAD
+  pthread_t child_thread;
+  pthread_create(&child_thread, 0, func, data);
+#else
+  func(data);
+#endif
+}
+
