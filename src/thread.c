@@ -178,7 +178,7 @@ smal_thread *smal_thread_self()
 void smal_thread_died(smal_thread *t)
 {
   if ( ! t ) t = smal_thread_self();
-  assert(t->status == smal_thread_ALIVE);
+  // assert(t->status == smal_thread_ALIVE);
   t->status = smal_thread_DEAD;
   t->bottom_of_stack = t->top_of_stack = 0;
   memset(&t->registers, 0, sizeof(t->registers));
@@ -208,7 +208,7 @@ int smal_thread_each(int (*func)(smal_thread *t, void *arg), void *arg)
 
 int smal_thread_do_once(smal_thread_once *once, void (*init_routine)())
 {
-  return smal_ASSERT(pthread_once(once, init_routine), == 0);
+  return smal_assert(pthread_once(once, init_routine), == 0);
 }
 
 #else /* ! SMAL_THREAD */

@@ -48,16 +48,13 @@ static void initialize()
 static smal_finalized *find_finalized_by_referred(void *ptr)
 {
   void **ptrp, *finalized;
-  if ( ! initialized ) initialize();
   finalized = (ptrp = voidP_voidP_TableGet(&referred_table, ptr)) ? *ptrp : 0;
   return finalized;
 }
 
 static void add_finalized(smal_finalized *finalized)
 {
-  smal_thread_mutex_lock(&referred_table_mutex);
   voidP_voidP_TableAdd(&referred_table, finalized->referred, finalized);
-  smal_thread_mutex_unlock(&referred_table_mutex);
 }
 
 static void remove_finalized(smal_finalized *finalized)
@@ -71,6 +68,8 @@ smal_finalizer * smal_finalizer_create(void *ptr, void (*func)(smal_finalizer *f
 {
   smal_finalized *finalized = 0;
   smal_finalizer *finalizer;
+
+  if ( ! initialized ) initialize();
 
   smal_thread_mutex_lock(&referred_table_mutex);
   if ( ! (finalized = find_finalized_by_referred(ptr)) ) {

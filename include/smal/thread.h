@@ -84,10 +84,10 @@ int smal_thread_mutex_unlock(smal_thread_mutex *m);
 
 #if SMAL_PTHREAD
 #if ! SMAL_THREAD_MUTEX_DEBUG
-#define smal_thread_mutex_init(M)    smal_ASSERT(pthread_mutex_init(M, 0), == 0)
-#define smal_thread_mutex_destroy(M) smal_ASSERT(pthread_mutex_destroy(M), == 0)
-#define smal_thread_mutex_lock(M)    smal_ASSERT(pthread_mutex_lock(M),    == 0)
-#define smal_thread_mutex_unlock(M)  smal_ASSERT(pthread_mutex_unlock(M),  == 0)
+#define smal_thread_mutex_init(M)    smal_assert(pthread_mutex_init(M, 0), == 0)
+#define smal_thread_mutex_destroy(M) smal_assert(pthread_mutex_destroy(M), == 0)
+#define smal_thread_mutex_lock(M)    smal_assert(pthread_mutex_lock(M),    == 0)
+#define smal_thread_mutex_unlock(M)  smal_assert(pthread_mutex_unlock(M),  == 0)
 #endif
 #else
 #if ! SMAL_THREAD_MUTEX_DEBUG
@@ -111,11 +111,11 @@ int smal_thread_mutex_unlock(smal_thread_mutex *m);
 
 #if SMAL_PTHREAD
 typedef pthread_rwlock_t smal_thread_rwlock;
-#define smal_thread_rwlock_init(L)    smal_ASSERT(pthread_rwlock_init(L, 0), == 0)
-#define smal_thread_rwlock_destroy(L) smal_ASSERT(pthread_rwlock_destroy(L), == 0)
-#define smal_thread_rwlock_rdlock(L)  smal_ASSERT(pthread_rwlock_rdlock(L),  == 0)
-#define smal_thread_rwlock_wrlock(L)  smal_ASSERT(pthread_rwlock_wrlock(L),  == 0)
-#define smal_thread_rwlock_unlock(L)  smal_ASSERT(pthread_rwlock_unlock(L),  == 0)
+#define smal_thread_rwlock_init(L)    smal_assert(pthread_rwlock_init(L, 0), == 0)
+#define smal_thread_rwlock_destroy(L) smal_assert(pthread_rwlock_destroy(L), == 0)
+#define smal_thread_rwlock_rdlock(L)  smal_assert(pthread_rwlock_rdlock(L),  == 0)
+#define smal_thread_rwlock_wrlock(L)  smal_assert(pthread_rwlock_wrlock(L),  == 0)
+#define smal_thread_rwlock_unlock(L)  smal_assert(pthread_rwlock_unlock(L),  == 0)
 #else
 typedef struct { int _rwlock; } smal_thread_rwlock;
 #define smal_thread_rwlock_init(L)    ((void) (L))

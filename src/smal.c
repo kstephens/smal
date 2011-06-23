@@ -574,7 +574,7 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
 
   smal_thread_mutex_init(&self->stats._mutex);
   smal_thread_mutex_init(&self->alloc_ptr_mutex);
-  smal_thread_rwlock_init(&self->mark_bits_lock);
+  // smal_thread_rwlock_init(&self->mark_bits_lock);
   smal_thread_rwlock_init(&self->free_bits_lock);
   smal_thread_mutex_init(&self->free_list_mutex);
 
@@ -773,7 +773,7 @@ void smal_buffer_free(smal_buffer *self)
 
   smal_thread_mutex_destroy(&self->stats._mutex);
   smal_thread_mutex_destroy(&self->alloc_ptr_mutex);
-  smal_thread_rwlock_destroy(&self->mark_bits_lock);
+  // smal_thread_rwlock_destroy(&self->mark_bits_lock);
   smal_thread_rwlock_destroy(&self->free_bits_lock);
   smal_thread_mutex_destroy(&self->free_list_mutex);
 
