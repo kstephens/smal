@@ -1,17 +1,26 @@
 #!/usr/bin/env ruby
 # -*- ruby -*-
+require 'rubygems'
+case RUBY_VERSION
+when /^1\.9/
+  gem 'ruby-debug19'
+  require 'ruby-debug'
+else
+  gem 'ruby-debug'
+  require 'ruby-debug'
+end
 
 class AssemblyCallGraph
-  attr_accessor :codes, :codes_by_label
+  attr_reader :procedures, :codes_by_label
 
   def initialize
-    @codes = [ ]
+    @procedures = [ ]
     @obj_by_label = { }
   end
 
   def parse input = nil
     input ||= $stdin
-    @code = nil
+    @procedure = nil
     @line = 0
     @queued_labels = [ ]
     until input.eof?
@@ -32,6 +41,9 @@ class AssemblyCallGraph
       when /^\s*(call)\s+([a-z0-9_]+)/i
         opcode, dst_label = $1, $2.to_sym
         isn = Instruction::Call.new
+      when /^\s*(ret)\b/i
+        opcode = $1
+        isn = Instruction::Return.new
       when /^\s*(j[a-z0-9]+)\s+([a-z0-9_]+)/i
         opcode, dst_label = $1, $2.to_sym
         isn = Instruction::Branch.new
@@ -64,10 +76,10 @@ class AssemblyCallGraph
     else
       unless @queued_labels.empty?
         # If there is a global label?
-        # emit a new Code object.
+        # emit a new Procedure object.
         if @queued_labels.find{|x| x.global?}
           # pp [ :emit_new_code_for, @labels, isn ]
-          @code = nil
+          @procedure = nil
         end
         @queued_labels.each do | label |
           _add_isn(label)
@@ -82,7 +94,7 @@ class AssemblyCallGraph
 
 =begin
       if Instruction::Branch === @branch_isn
-        @branch_isn.false_code = code
+        @branch_isn.false_isn = code
         @branch_isn = nil
       end
 =end
@@ -92,16 +104,16 @@ class AssemblyCallGraph
   end
 
   def _add_isn isn
-    @code ||= add_code(Code.new)
-    @code.add_isn(isn)
+    @procedure ||= add_proc(Procedure.new)
+    @procedure.add_isn(isn)
     isn
   end
   
-  def add_code code
-    code.context = self
-    code.line = @line
-    @codes << code
-    code
+  def add_proc p
+    p.context = self
+    p.line = @line
+    @procedures << p
+    p
   end
   
   def add_label! label, obj
@@ -112,18 +124,9 @@ class AssemblyCallGraph
   end
 
   def resolve_label label
+    raise TypeError unless Symbol === label
     @obj_by_label[label] or 
-      add_code(Code.new).add_label!(label).extern!
-  end
-
-  def prepare_codes!
-    prev_code = nil
-    @codes.each do | code |
-      if code.extern?
-        prev
-      else
-      end
-    end
+      add_proc(Procedure.new).add_label!(label).extern!
   end
 
   module Labels
@@ -159,10 +162,10 @@ class AssemblyCallGraph
     end
   end
   
-  class Code
+  class Region
     attr_accessor :context, :file, :line
+    attr_accessor :owner
     attr_reader :lines, :labels, :isns
-    attr_accessor :extern
     attr_accessor :prev, :next
 
     include Labels
@@ -174,18 +177,19 @@ class AssemblyCallGraph
       @isns = [ ]
     end
 
-    def extern!
-      @extern = true
-      self
-    end
-
     def empty?
       @isns.empty?
+    end
+
+    def label
+      @label ||= 
+        super || "l#{@lines.first.line}"
     end
 
     attr_reader :has_non_label
 
     def add_isn isn
+      @line ||= isn.line
       @lines << isn
       isn.owner = self
       isn.context ||= self.context
@@ -203,6 +207,15 @@ class AssemblyCallGraph
         end
         @queued_labels.clear
 
+        # Attach 
+        if @isns.empty? and p_region = prev
+          case last_isn = p_region.isns[-1]
+          when Instruction::Jump, Instruction::Return
+          else
+            last_isn.next ||= isn
+          end
+        end
+
         @isns << isn
         @has_non_label = true 
       end
@@ -216,15 +229,78 @@ class AssemblyCallGraph
 
     def to_s
       @to_s ||=
-        (@extern ? "EXTERN " : "%5d { " % @line) << "\n" <<
+        ("%5d R { " % (@line || -1)) << "\n" <<
         (@lines.map{|x| x.to_s} * '' << "\n") <<
-        "      }"
+        "      } R\n"
     end
+  end
+
+  class Procedure < Region
+    attr_reader :regions
+    def initialize
+      super
+      @regions = [ ]
+    end
+    def empty? 
+      @regions.empty?
+    end
+
+    attr_accessor :extern
+    def extern!
+      @extern = true
+      self
+    end
+
+    def label
+      r = @regions.first and r.label
+    end
+
+    def add_label! label
+      @region or new_region!
+      @region.add_label! label
+      self
+    end
+
+    def new_region!
+      region = Region.new
+      region.context = context
+      region.owner = self
+      region.prev = @region
+      @region.next = region if @region
+      @regions << region
+      @region = region
+      region
+    end
+
+    def add_isn isn
+      # $stderr.puts "@region = #{@region}"
+      # debugger
+      new_region = ! @region
+      last_isn = @region && @region.isns[-1]
+      case last_isn
+      when Instruction::AbstractJump, Instruction::Return
+        new_region = true
+      end
+      if new_region
+        new_region!
+      end
+      @region.add_isn(isn)
+      isn
+    end
+
+    def to_s
+      @to_s ||=
+        (@extern ? "EXTERN #{label}" : "%5d P { " % (@line || -1)) << "\n" <<
+        (@regions.map{|x| x.to_s} * '' << "\n") <<
+        "      } P"
+    end
+
   end
 
   class Instruction
     attr_accessor :context, :file, :line, :owner
     attr_accessor :isn
+    attr_accessor :prev, :next
 
     include Labels
     def initialize
@@ -247,41 +323,40 @@ class AssemblyCallGraph
       attr_accessor :label
     end
 
-    class Jump < self
+    class Flow < self
       attr_accessor :dst_label, :dst_code
       def dst_code
         @dst_code ||= @dst_label && context.resolve_label(@dst_label)
       end
-      def dst_label
-        @dst_label ||= @dst_code && @dst_code.label
-      end
-      def dst_code_isn
-        @dst_code_isn ||= dst_code.first_isn
-      end
-
       def to_s
         @to_s ||= 
-          super.sub("\n", " # line #{dst_code.first_isn.line}\n")
+          super.sub("\n", " # line #{dst_code.first_isn.line} (#{@next && @next.line})\n")
       end
     end
 
-    class Call < Jump
+    class AbstractCall < Flow
     end
 
-    class Branch < Jump
+    class Call < AbstractCall
+    end
+
+    class Return < AbstractCall
+      def dst_code
+        self
+      end
+    end
+
+    class AbstractJump < Flow
+    end
+
+    class Jump < AbstractJump
+    end
+
+    class Branch < AbstractJump
       alias :true_label :dst_label
       alias :true_label= :dst_label=
       alias :true_code :dst_code
       alias :true_code= :dst_code=
-
-      attr_accessor :false_label, :false_code
-      def false_code
-        @false_code ||= @false_label && context.resolve_label(@false_label)
-      end
-      def false_label
-        @false_label ||= @false_code && @false_code.label
-      end
-
     end
   end
 
@@ -314,28 +389,39 @@ END
   end
 
   def to_dot_node obj, out = nil
+    # $stderr.puts "  to_dot_node #{obj.class} #{obj.object_id} #{obj.label rescue nil}"
     case obj
-    when Instruction::Label
-      nil
-
-    when Instruction
-      obj.to_s.
-        sub(/\s*\n/, '').
-        gsub(/\t/, '    ').
-        gsub(/[\{\}\|\s\<\>]/) do | m |
-        '\\' + m
+    when AssemblyCallGraph
+      obj.procedures.each do | x |
+        to_dot_node(x, out)
       end
 
-    when Code
+    when Procedure
+      return if @dot_ids[obj]
+      dot_id = @dot_ids[obj] = "cluster_#{obj.label}"
+      out.puts <<"END"
+subgraph "#{dot_id}" {
+   style=filled;
+   color=white;
+END
+      obj.regions.each do | region  |
+        to_dot_node(region, out)
+      end
+
+      out.puts <<"END"
+}
+END
+
+    when Region
       return if @dot_ids[obj]
       dot_id = @dot_ids[obj] = obj.label
       dot_label = ''
-      dot_label << "<l0>#{obj.label}:\\l|"
+      dot_label << "<l0>#{dot_id}: (#{obj.isns.size} isns)\\l"
       obj.lines.each do | isn |
         if field = to_dot_node(isn)
           f = "l#{isn.line}"
           @dot_ids[isn] ||= "\"#{dot_id}\":#{f}"
-          dot_label << "<#{f}>#{field}\\l|"
+          dot_label << "|<#{f}>#{field}\\l"
         end
       end
       out.puts <<"END"
@@ -345,45 +431,63 @@ END
 ];
 END
 
-    when AssemblyCallGraph
-      obj.codes.each do | x |
-        to_dot_node(x, out) unless x.empty?
+    when Instruction::Label
+      nil
+
+    when Instruction
+      # $stderr.puts "Isn #{obj}"
+      obj.to_s.
+        sub(/\s*\n/, '').
+        gsub(/\t/, '    ').
+        gsub(/[\{\}\|\s\<\>]/) do | m |
+        '\\' + m
       end
+
     end
   end
 
   def to_dot_edge obj, out = nil
     case obj
-    when Instruction::Jump
+    when AssemblyCallGraph
+      obj.procedures.each do | p |
+        to_dot_edge(p, out)
+      end
+
+    when Procedure
+      obj.regions.each do | r |
+        to_dot_edge(r, out)
+      end
+      
+    when Region
+      obj.isns.each do | isn |
+        to_dot_edge(isn, out)
+        if ni = isn.next
+          src = @dot_ids[isn] or raise "no @dot_ids for #{isn}"
+          if dst = @dot_ids[ni]
+            dst = "#{dst}:w"
+            style = nil # "style=dashed"
+            out.puts <<"END"
+    #{src}:s -> #{dst} [ #{style} ];
+END
+          else
+            warn "No @dot_ids for #{ni}"
+          end
+        end
+      end
+
+    when Instruction::AbstractJump
+      src = @dot_ids[obj] or raise "no @dot_ids for #{obj}"
       if dst = @dot_ids[obj.dst_code]
-        dst = "#{dst}:e"
-        style = nil
+        dst = "#{dst}:w"
+        style = "style=dashed"
       else
         dst = obj.dst_label
         style = "style=dotted"
       end
       out.puts <<"END"
-    #{@dot_ids[obj]}:e -> #{dst} [ #{style} ];
+    #{src}:e -> #{dst} [ #{style} ];
 END
 
-    when Code
-      obj.isns.each do | x |
-        to_dot_edge(x, out)
-      end
-      
-    when AssemblyCallGraph
-      prev_code = nil
-      obj.codes.each do | code |
-        to_dot_edge(code, out)
-=begin
-        if prev_code
-          out.puts <<"END"
-  "#{@dot_ids[prev_code]}" -> "#{@dot_ids[code]}" [ ];
-END
-        end
-        prev_code = code
-=end
-      end
     end
   end
 
@@ -399,8 +503,10 @@ s_file = "src/smal.s"
 File.open(s_file) do | io |
   acg.parse(io)
 end
-acg.codes.each do | c |
-  puts c unless c.empty?
+if false
+  acg.procedures.each do | p |
+    puts p unless p.empty?
+  end
 end
 puts "====================="
 s_dot_file = "#{s_file}.dot"
