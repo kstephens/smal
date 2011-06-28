@@ -67,6 +67,7 @@ static void reference_type_mark(void *object)
   smal_reference_queue_list *ref_queue_list;
 
   smal_thread_mutex_lock(&reference->mutex);
+  smal_mark_ptr(reference, reference->data);
   ref_queue_list = reference->reference_queue_list;
   while ( ref_queue_list ) {
     smal_mark_ptr(reference, ref_queue_list->reference_queue);
