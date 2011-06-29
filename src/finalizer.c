@@ -63,7 +63,6 @@ static void remove_finalized(smal_finalized *finalized)
   voidP_voidP_TableRemove(&referred_table, finalized->referred);
 }
 
-
 smal_finalizer * smal_finalizer_create(void *ptr, void (*func)(smal_finalizer *finalizer))
 {
   smal_finalized *finalized = 0;
@@ -162,6 +161,7 @@ void smal_finalizer_after_sweep()
     }
     finalized = finalized->next;
     smal_thread_mutex_unlock(&zed->mutex);
+    smal_thread_mutex_destroy(&zed->mutex);
     smal_thread_mutex_lock(&finalized_queue_mutex);
     free(finalized_queue);
     finalized_queue = finalized;
