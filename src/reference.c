@@ -181,7 +181,7 @@ void queue_reference(smal_reference_queue *ref_queue, smal_reference *reference)
 {
   smal_reference_list *list;
   if ( ! (list = malloc(sizeof(*list))) )
-    return;
+    return; /* FIXME: but how? */
   list->reference = reference;
   smal_thread_mutex_lock(&ref_queue->mutex);
   list->next = ref_queue->reference_list;
