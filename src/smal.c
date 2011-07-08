@@ -1348,9 +1348,7 @@ void smal_collect_wait_for_sweep()
   smal_thread_join(sweep_thread);
 }
 
-
 /**********************************************/
-
 
 smal_type *smal_type_for_desc(smal_type_descriptor *desc)
 {
