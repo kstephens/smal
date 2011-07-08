@@ -68,7 +68,7 @@ void smal_mark_queue_mark(int one)
       -- mark_queue_depth;
       // fprintf(stderr, "%*s m(%p)\n", -- mark_queue_depth, " ", ptr);
 #endif
-      _smal_mark_ptr(referrer, ptr);
+      _smal_mark_ptr_tail(referrer, ptr);
       if ( one )
 	return;
     }

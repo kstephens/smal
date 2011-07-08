@@ -241,9 +241,16 @@ static int in_sweep;
 static int no_collect;
 
 static
-void null_func(void *ptr)
+void null_free_func(void *ptr)
 {
   /* NOTHING */
+}
+
+static
+void* null_mark_func(void *ptr)
+{
+  /* NOTHING */
+  return 0;
 }
 
 #define smal_LOCK_STATS(N)						\
@@ -307,7 +314,10 @@ int smal_munmap(void *addr, size_t length)
  */
 
 static inline
-void _smal_mark_ptr(void *, void*);
+void* _smal_mark_ptr(void *, void*);
+
+static inline
+void _smal_mark_ptr_tail(void *, void*);
 
 #if SMAL_WRITE_BARRIER
 #include "write_barrier.h"
@@ -814,7 +824,7 @@ smal_buffer *smal_buffer_from_ptr(void *ptr)
   smal_bitmap_setQ(&(BUF)->free_bits, smal_buffer_i(BUF, PTR))
 
 static inline
-void _smal_buffer_mark_ptr(smal_buffer *self, void *referrer, void *ptr)
+void * _smal_buffer_mark_ptr(smal_buffer *self, void *referrer, void *ptr)
 {
   assert(in_collect); /* mark_bits should only be touched by smal_collect() and its thread. */
   // smal_thread_rwlock_rdlock(&self->mark_bits_lock);
@@ -845,22 +855,35 @@ void _smal_buffer_mark_ptr(smal_buffer *self, void *referrer, void *ptr)
     smal_buffer_mark(self, ptr);
 
     if ( smal_unlikely(! self->markable) )
-      return;
-    self->type->desc.mark_func(ptr);
+      return 0;
+    ptr = self->type->desc.mark_func(ptr);
     smal_after_mark_func();
+    return ptr;
   }
+  return 0;
 }
 
 static inline
-void _smal_mark_ptr(void *referrer, void *ptr)
+void * _smal_mark_ptr(void *referrer, void *ptr)
 {
   smal_buffer *buf;
   if ( (buf = smal_ptr_to_buffer(ptr)) ) {
     // smal_debug(mark, 5, "ptr @%p => buf @%p", ptr, buf);
     if ( smal_buffer_ptr_is_validQ(buf, ptr) ) {
-      _smal_buffer_mark_ptr(buf, referrer, ptr);
+      return _smal_buffer_mark_ptr(buf, referrer, ptr);
     }
   }
+  return 0;
+}
+
+static inline
+void _smal_mark_ptr_tail(void *referrer, void *ptr)
+{
+  do {
+    void *new_referrer = ptr;
+    ptr = _smal_mark_ptr(referrer, ptr);
+    referrer = new_referrer;
+  } while ( ptr );
 }
 
 /********************************************************************
@@ -888,18 +911,18 @@ void smal_mark_bindings(int n, void ***bindings)
 #define smal_mark_queue_mark_all() ((void) 0)
 void smal_mark_ptr(void *referrer, void *ptr)
 {
-  _smal_mark_ptr(referrer, ptr);
+  _smal_mark_ptr_tail(referrer, ptr);
 }
 void smal_mark_ptr_n(void *referrer, int n_ptrs, void **ptrs)
 {
-  while ( -- n_ptrs >= 0 )
-    _smal_mark_ptr(referrer, *(ptrs ++));
+  while ( -- n_ptrs >= 0 ) {
+    _smal_mark_ptr_tail(referrer, *(ptrs ++));
 }
 void smal_mark_bindings(int n, void ***bindings)
 {
   while ( -- n >= 0 ) {
     void *ptr = * *(bindings ++);
-    _smal_mark_ptr(0, ptr);
+    _smal_mark_ptr_tail(0, ptr);
   }
 }
 #endif
@@ -1366,9 +1389,9 @@ smal_type *smal_type_for_desc(smal_type_descriptor *desc)
     desc->object_alignment = sizeof(double);
 
   if ( ! desc->mark_func )
-    desc->mark_func = null_func;
+    desc->mark_func = null_mark_func;
   if ( ! desc->free_func )
-    desc->free_func = null_func;
+    desc->free_func = null_free_func;
   if ( ! desc->collections_per_sweep )
     desc->collections_per_sweep = 1; /* sweep on every collection. */
 

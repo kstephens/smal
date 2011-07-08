@@ -32,7 +32,7 @@
 #define smal_alignedQ(ptr,align) (((size_t)(ptr) % (align)) == 0)
 #define smal_ALIGN(ptr,align) if ( (size_t)(ptr) % (align) ) (ptr) += (align) - ((size_t)(ptr) % (align))
 
-typedef void (*smal_mark_func)(void *ptr);
+typedef void *(*smal_mark_func)(void *ptr);
 typedef void (*smal_free_func)(void *ptr);
 
 struct smal_type;

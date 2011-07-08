@@ -18,11 +18,11 @@ static voidP_voidP_Table referred_table;
 static smal_thread_mutex referred_table_mutex;
 
 static smal_type *reference_type;
-static void reference_type_mark(void *object);
+static void* reference_type_mark(void *object);
 static void reference_type_free(void *object);
 
 static smal_type *reference_queue_type;
-static void ref_queue_mark(void *ptr);
+static void* ref_queue_mark(void *ptr);
 
 static int initialized;
 static smal_thread_once _initalized = smal_thread_once_INIT;
@@ -61,7 +61,7 @@ static void remove_reference(smal_reference *reference)
   voidP_voidP_TableRemove(&referred_table, reference->referred);
 }
 
-static void reference_type_mark(void *object)
+static void* reference_type_mark(void *object)
 {
   smal_reference *reference = object;
   smal_reference_queue_list *ref_queue_list;
@@ -73,6 +73,7 @@ static void reference_type_mark(void *object)
     ref_queue_list = ref_queue_list->next;
   }
   smal_thread_mutex_unlock(&reference->mutex);
+  return 0;
 }
 static void reference_type_free(void *object)
 {
@@ -140,7 +141,7 @@ void* smal_reference_referred(smal_reference *reference)
   return ptr;
 }
 
-static void ref_queue_mark(void *ptr)
+static void* ref_queue_mark(void *ptr)
 {
   smal_reference_queue *ref_queue = ptr;
   smal_reference_list *list;
@@ -152,6 +153,7 @@ static void ref_queue_mark(void *ptr)
     list = list->next;
   }
   smal_thread_mutex_unlock(&ref_queue->mutex);
+  return 0;
 }
 
 smal_reference_queue *smal_reference_queue_create()
