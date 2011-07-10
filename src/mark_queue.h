@@ -101,18 +101,13 @@ void smal_mark_queue_mark_all()
 #endif
 }
 
-static
-void stop_here()
-{
-}
-
 static inline
 void smal_mark_queue_add(void *referrer, int ptr_n, void **ptrs, int pointers_to_pointersQ)
 {
 #if 0
   fprintf(stderr, "%*s s_m_q_a(%p, %d, %p, %d)\n", mark_queue_add_depth ++, " ", referrer, ptr_n, ptrs, pointers_to_pointersQ);
 #endif
-  if ( ptr_n > 50 ) stop_here();
+  // if ( ptr_n > 50 ) stop_here();
   if ( pointers_to_pointersQ ) {
     while ( -- ptr_n >= 0 ) {
       void **ptr_p = *(ptrs ++);
