@@ -1578,22 +1578,13 @@ void smal_free(void *ptr)
 
 /********************************************************************/
 
-int smal_each_object(int (*func)(smal_type *type, void *ptr, void *arg), void *arg)
+static
+int smal_each_object_list(smal_buffer_list_head *list, int (*func)(smal_type *type, void *ptr, void *arg), void *arg)
 {
   smal_buffer *buf;
   int result = 0;
 
-  if ( smal_unlikely(in_collect) ) abort();
-  if ( smal_unlikely(! initialized) ) initialize();
-
-  // ++ no_collect;
-
-  // fprintf(stderr, "  s_e_o: \n");
-  /* Pause smal_collect (writer) */
-  smal_thread_rwlock_rdlock(&alloc_lock);
-
-  smal_thread_rwlock_rdlock(&buffer_head_lock);
-  smal_dllist_each(&buffer_head, buf); {
+  smal_dllist_each(list, buf); {
     void *ptr, *alloc_ptr = smal_buffer_alloc_ptr(buf);
     // fprintf(stderr, "    s_e_o bh b@%p\n", buf);
     smal_thread_rwlock_rdlock(&buf->free_bits_lock);
@@ -1608,30 +1599,35 @@ int smal_each_object(int (*func)(smal_type *type, void *ptr, void *arg), void *a
     if ( smal_unlikely(result < 0) ) break;
     smal_thread_rwlock_unlock(&buf->free_bits_lock);
   } smal_dllist_each_end();
+
+  return result;
+}
+
+int smal_each_object(int (*func)(smal_type *type, void *ptr, void *arg), void *arg)
+{
+  int result = 0;
+
+  if ( smal_unlikely(in_collect) ) abort();
+  if ( smal_unlikely(! initialized) ) initialize();
+
+  // ++ no_collect;
+
+  // fprintf(stderr, "  s_e_o: \n");
+  /* Pause smal_collect (writer) */
+  smal_thread_rwlock_rdlock(&alloc_lock);
+
+  smal_thread_rwlock_rdlock(&buffer_head_lock);
+  result = smal_each_object_list((void*) &buffer_head, func, arg);
   smal_thread_rwlock_unlock(&buffer_head_lock);
 
-  if ( smal_unlikely(result < 0) ) return result;
+  if ( smal_unlikely(result < 0) ) goto done;
 
   smal_thread_rwlock_rdlock(&buffer_collecting_lock);
-  smal_dllist_each(&buffer_collecting, buf); {
-    void *ptr, *alloc_ptr = smal_buffer_alloc_ptr(buf);
-    // fprintf(stderr, "    s_e_o bc b@%p\n", buf);
-    smal_thread_rwlock_rdlock(&buf->free_bits_lock);
-    for ( ptr = buf->begin_ptr; ptr < alloc_ptr; ptr += smal_buffer_object_size(buf) ) {
-      if ( ! smal_buffer_freeQ(buf, ptr) ) {
-	smal_thread_rwlock_unlock(&buf->free_bits_lock);
-	result = func(buf->type, ptr, arg);
-	if ( smal_unlikely(result < 0) ) break;
-	smal_thread_rwlock_rdlock(&buf->free_bits_lock);
-      }
-    }
-    if ( smal_unlikely(result < 0) ) break;
-    smal_thread_rwlock_unlock(&buf->free_bits_lock);
-  } smal_dllist_each_end();
+  result = smal_each_object_list(&buffer_collecting, func, arg);
   smal_thread_rwlock_unlock(&buffer_collecting_lock);
 
+  done:
   smal_thread_rwlock_unlock(&alloc_lock);
-
   // -- no_collect;
   return result;
 }
@@ -1678,8 +1674,13 @@ static void _initialize()
   }
 
   memset(&buffer_head, 0, sizeof(buffer_head));
+  smal_dllist_init(&buffer_head);
+
   memset(&buffer_collecting, 0, sizeof(buffer_collecting));
+  smal_dllist_init(&buffer_collecting);
+
   memset(&type_head, 0, sizeof(type_head));
+  smal_dllist_init(&type_head);
 
   smal_thread_mutex_init(&_smal_debug_mutex);
   smal_thread_rwlock_init(&alloc_lock);
@@ -1690,10 +1691,6 @@ static void _initialize()
   smal_thread_rwlock_init(&buffer_table_lock);
 
   smal_thread_lock_init(&_smal_collect_inner_lock);
-
-  smal_dllist_init(&buffer_head);
-  smal_dllist_init(&buffer_collecting);
-  smal_dllist_init(&type_head);
 
   page_id_min = 0; page_id_max = 0;
   page_id_min_max_valid = 0;
