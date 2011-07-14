@@ -1634,6 +1634,7 @@ int smal_each_object(int (*func)(smal_type *type, void *ptr, void *arg), void *a
 
 void smal_global_stats(smal_stats *stats)
 {
+  if ( smal_unlikely(! initialized) ) initialize();
   smal_thread_mutex_lock(&buffer_head.stats._mutex);
   *stats = buffer_head.stats;
   smal_thread_mutex_unlock(&buffer_head.stats._mutex);
