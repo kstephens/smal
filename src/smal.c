@@ -856,7 +856,10 @@ void * _smal_buffer_mark_ptr(smal_buffer *self, void *referrer, void *ptr)
 
     if ( smal_unlikely(! self->markable) )
       return 0;
-    ptr = self->type->desc.mark_func(ptr);
+#ifndef smal_MARK_FUNC
+#define smal_MARK_FUNC(ptr) self->type->desc.mark_func(ptr)
+#endif
+    ptr = smal_MARK_FUNC(ptr);
     smal_after_mark_func();
     return ptr;
   }
