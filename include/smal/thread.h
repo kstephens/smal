@@ -169,5 +169,6 @@ typedef struct smal_thread_lock {
 /******************************************************/
 
 void smal_thread_spawn_or_inline(void *(*func)(void *data), void *data);
+void smal_thread_died(smal_thread *t);
 
 #endif

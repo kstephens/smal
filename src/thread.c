@@ -175,16 +175,6 @@ smal_thread *smal_thread_self()
   }
 }
 
-void smal_thread_died(smal_thread *t)
-{
-  if ( ! t ) t = smal_thread_self();
-  // assert(t->status == smal_thread_ALIVE);
-  t->status = smal_thread_DEAD;
-  t->bottom_of_stack = t->top_of_stack = 0;
-  memset(&t->registers, 0, sizeof(t->registers));
-}
-
-
 int smal_thread_getstack(smal_thread *t, void **addrp, size_t *sizep)
 {
   // FIXME: // return pthread_getstack(t->thread, addrp, sizep);
@@ -247,6 +237,15 @@ int smal_thread_do_once(smal_thread_once *once, void (*init_routine)())
 }
 
 #endif
+
+void smal_thread_died(smal_thread *t)
+{
+  if ( ! t ) t = smal_thread_self();
+  // assert(t->status == smal_thread_ALIVE);
+  t->status = smal_thread_DEAD;
+  t->bottom_of_stack = t->top_of_stack = 0;
+  memset(&t->registers, 0, sizeof(t->registers));
+}
 
 void smal_thread_save_registers(smal_thread *thread)
 {

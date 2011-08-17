@@ -230,20 +230,32 @@ static int page_id_min_max_valid;
 static smal_buffer *buffer_table_init[] = { 0 };
 static smal_buffer **buffer_table = buffer_table_init;
 static size_t buffer_table_size = 1;
+static smal_buffer **buffer_table_mark = buffer_table_init;
+static size_t buffer_table_mark_size = 1;
+
 static smal_thread_rwlock buffer_table_lock;
+//static smal_thread_rwlock buffer_table_mark_lock;
 
 static smal_thread_lock _smal_collect_inner_lock;
 
 static size_t collect_id; /** may wrap. */
 static int in_collect; /** protected by alloc_lock */
+static int in_shutdown;
 static int in_mark;
 static int in_sweep;
 static int no_collect;
 
 static
-void null_func(void *ptr)
+void null_free_func(void *ptr)
 {
   /* NOTHING */
+}
+
+static
+void* null_mark_func(void *ptr)
+{
+  /* NOTHING */
+  return 0;
 }
 
 #define smal_LOCK_STATS(N)						\
@@ -307,7 +319,10 @@ int smal_munmap(void *addr, size_t length)
  */
 
 static inline
-void _smal_mark_ptr(void *, void*);
+void* _smal_mark_ptr(void *, void*);
+
+static inline
+void _smal_mark_ptr_tail(void *, void*);
 
 #if SMAL_WRITE_BARRIER
 #include "write_barrier.h"
@@ -328,26 +343,25 @@ void _smal_mark_ptr(void *, void*);
  ** Map any address to smal_buffer*.
  */
 
-#define smal_ptr_to_buffer(PTR)						\
-  smal_WITH_RDLOCK(&buffer_table_lock, smal_buffer*, buffer_table[smal_addr_page_id(PTR) % buffer_table_size])
+#define smal_ptr_to_buffer(PTR,BUFFER_TABLE)			\
+  (BUFFER_TABLE[smal_addr_page_id(PTR) % BUFFER_TABLE##_size])
 
-#define smal_buffer_i(BUF, PTR) \
-  (((void*)(PTR) - smal_buffer_to_page(BUF)) / smal_buffer_object_size(BUF))
+#define smal_buffer_ptr_i(BUF, PTR)					\
+  (((void*)(PTR) - (BUF)->begin_ptr) / smal_buffer_object_size(BUF))
 
-#define smal_buffer_alloc_ptr(BUF)				       \
-  smal_WITH_MUTEX(&(BUF)->alloc_ptr_mutex, void*, (BUF)->alloc_ptr)	       \
-  
+#if 0
+#define smal_buffer_alloc_ptr(BUF)					\
+  smal_WITH_MUTEX(&(BUF)->alloc_ptr_mutex, void*, (BUF)->alloc_ptr)
+#else
+#define smal_buffer_alloc_ptr(BUF)		\
+  (BUF)->alloc_ptr
+#endif
+
 #define smal_buffer_ptr_is_in_rangeQ(BUF, PTR)				\
   ((BUF)->begin_ptr <= (PTR) && (PTR) < smal_buffer_alloc_ptr(BUF))
 
-#define smal_buffer_ptr_is_alignedQ(BUF, PTR)			\
-  smal_alignedQ((PTR), smal_buffer_object_alignment(BUF))
-
-#define smal_buffer_ptr_is_validQ(BUF, PTR) \
-  (					    \
-   smal_buffer_ptr_is_alignedQ(BUF, PTR) && \
-   smal_buffer_ptr_is_in_rangeQ(BUF, PTR)   \
-					    )
+#define smal_buffer_ptr_is_validQ(BUF, PTR)	\
+  smal_buffer_ptr_is_in_rangeQ(BUF, PTR)
 
 void smal_buffer_print_all(smal_buffer *self, const char *action)
 {
@@ -388,6 +402,7 @@ void smal_buffer_table_add(smal_buffer *self)
     page_id_min = page_id_max = smal_buffer_page_id(self);
     assert(page_id_min != 0);
     assert(page_id_max != 0);
+
     smal_thread_rwlock_rdlock(&buffer_head_lock);
     smal_dllist_each(&buffer_head, buf); {
       if ( page_id_min > smal_buffer_page_id(buf) )
@@ -396,6 +411,16 @@ void smal_buffer_table_add(smal_buffer *self)
 	page_id_max = smal_buffer_page_id(buf);
     } smal_dllist_each_end();
     smal_thread_rwlock_unlock(&buffer_head_lock);
+
+    smal_thread_rwlock_rdlock(&buffer_collecting_lock);
+    smal_dllist_each(&buffer_collecting, buf); {
+      if ( page_id_min > smal_buffer_page_id(buf) )
+	page_id_min = smal_buffer_page_id(buf);
+      else if ( page_id_max < smal_buffer_page_id(buf) )
+	page_id_max = smal_buffer_page_id(buf);
+    } smal_dllist_each_end();
+    smal_thread_rwlock_unlock(&buffer_collecting_lock);
+
     page_id_min_max_valid = 1;
   }
 
@@ -409,19 +434,37 @@ void smal_buffer_table_add(smal_buffer *self)
   fprintf(stderr, "  %lu page_id %lu @ %p [%lu, %lu] %lu\n", (unsigned long) buffer_head.stats.buffer_n, (unsigned long) self->page_id, self, (unsigned long) page_id_min, (unsigned long) page_id_max, (unsigned long) buffer_table_size_new);
 #endif
 
-  if ( smal_likely(buffer_table) ) {
-    for ( i = 0; i < buffer_table_size; ++ i ) {
-      smal_buffer *x = buffer_table[i];
-      if ( smal_likely(x) ) {
-	size_t j = smal_buffer_page_id(x) % buffer_table_size_new;
-	assert(! buffer_table_new[j]);
-	buffer_table_new[j] = x;
-      }
+  for ( i = 0; i < buffer_table_size; ++ i ) {
+    smal_buffer *x = buffer_table[i];
+    if ( smal_likely(x) ) {
+      size_t j = smal_buffer_page_id(x) % buffer_table_size_new;
+      assert(! buffer_table_new[j]);
+      buffer_table_new[j] = x;
     }
-    // fprintf(stderr, "smal_buffer_table_add(%p): free(%p)\n", self, buffer_table);
-    free(buffer_table);
   }
 
+  /* Allow buffer_table_mark to be independent of buffer_table during collection. */
+  if ( ! in_collect ) {
+    if ( buffer_table_mark != buffer_table ) {
+#if 0
+      fprintf(stderr, "smal_buffer_table_add(%p): free(buffer_table_mark = %p)\n", self, buffer_table_mark);
+#endif
+      free(buffer_table_mark);
+    }
+#if 0
+    fprintf(stderr, "smal_buffer_table_add(%p): free(buffer_table = %p)\n", self, buffer_table);
+#endif
+    free(buffer_table);
+    buffer_table_mark = buffer_table_new;
+    buffer_table_mark_size = buffer_table_size_new;
+  } else {
+    if ( buffer_table != buffer_table_mark ) {
+#if 0
+      fprintf(stderr, "smal_buffer_table_add(%p): free(buffer_table = %p)\n", self, buffer_table);
+#endif
+      free(buffer_table);
+    }
+  }
   buffer_table = buffer_table_new;
   buffer_table_size = buffer_table_size_new;
 
@@ -656,7 +699,7 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
   self->end_ptr = self->begin_ptr + (self->object_capacity * self->object_size);
   assert(self->end_ptr <= self->mmap_addr + self->mmap_size);
 
-  /* Free bits cover entire mmap area: see smal_buffer_i(). */
+  /* Free bits cover entire mmap area: see smal_buffer_ptr_i(). */
   self->free_bits.size = 
     self->mark_bits.size = (self->mmap_size / self->object_size) + 1;
   assert(self->mark_bits.size >= self->object_capacity);
@@ -729,6 +772,8 @@ void smal_buffer_free(smal_buffer *self)
 
   smal_debug(buffer, 1, "(@%p)", self);
 
+  assert(in_collect || in_shutdown);
+
   // Disable write barrier.
 #if SMAL_WRITE_BARRIER
   smal_buffer_write_unprotect(self);
@@ -796,7 +841,7 @@ void smal_buffer_free(smal_buffer *self)
 
 smal_buffer *smal_buffer_from_ptr(void *ptr)
 {
-  smal_buffer *buf = smal_ptr_to_buffer(ptr);
+  smal_buffer *buf = smal_ptr_to_buffer(ptr, buffer_table);
   return buf && smal_buffer_ptr_is_validQ(buf, ptr) ? buf : 0;
 }
 
@@ -805,16 +850,16 @@ smal_buffer *smal_buffer_from_ptr(void *ptr)
  */
 
 #define smal_buffer_markQ(BUF, PTR)				\
-  smal_bitmap_setQ(&(BUF)->mark_bits, smal_buffer_i(BUF, PTR))
+  smal_bitmap_setQ(&(BUF)->mark_bits, smal_buffer_ptr_i(BUF, PTR))
 
 #define smal_buffer_mark(BUF, PTR)				\
-  smal_bitmap_set_c(&(BUF)->mark_bits, smal_buffer_i(BUF, PTR))
+  smal_bitmap_set_c(&(BUF)->mark_bits, smal_buffer_ptr_i(BUF, PTR))
 
 #define smal_buffer_freeQ(BUF, PTR)				\
-  smal_bitmap_setQ(&(BUF)->free_bits, smal_buffer_i(BUF, PTR))
+  smal_bitmap_setQ(&(BUF)->free_bits, smal_buffer_ptr_i(BUF, PTR))
 
 static inline
-void _smal_buffer_mark_ptr(smal_buffer *self, void *referrer, void *ptr)
+void * _smal_buffer_mark_ptr(smal_buffer *self, void *referrer, void *ptr)
 {
   assert(in_collect); /* mark_bits should only be touched by smal_collect() and its thread. */
   // smal_thread_rwlock_rdlock(&self->mark_bits_lock);
@@ -830,7 +875,7 @@ void _smal_buffer_mark_ptr(smal_buffer *self, void *referrer, void *ptr)
     smal_buffer *referrer_buf;
     /* Record pointers from the referrer buffer to the ptr buffer? */
     if ( referrer && 
-	 (referrer_buf = smal_ptr_to_buffer(referrer))->record_remembered_set &&
+	 (referrer_buf = smal_ptr_to_buffer(referrer, buffer_table_mark))->record_remembered_set &&
 	 referrer_buf != self ) {
       smal_remembered_set_add(referrer_buf->remembered_set, referrer, ptr);
     }
@@ -845,22 +890,38 @@ void _smal_buffer_mark_ptr(smal_buffer *self, void *referrer, void *ptr)
     smal_buffer_mark(self, ptr);
 
     if ( smal_unlikely(! self->markable) )
-      return;
-    self->type->desc.mark_func(ptr);
+      return 0;
+#ifndef smal_MARK_FUNC
+#define smal_MARK_FUNC(ptr) self->type->desc.mark_func(ptr)
+#endif
+    ptr = smal_MARK_FUNC(ptr);
     smal_after_mark_func();
+    return ptr;
   }
+  return 0;
 }
 
 static inline
-void _smal_mark_ptr(void *referrer, void *ptr)
+void * _smal_mark_ptr(void *referrer, void *ptr)
 {
   smal_buffer *buf;
-  if ( (buf = smal_ptr_to_buffer(ptr)) ) {
+  if ( (buf = smal_ptr_to_buffer(ptr, buffer_table_mark)) ) {
     // smal_debug(mark, 5, "ptr @%p => buf @%p", ptr, buf);
     if ( smal_buffer_ptr_is_validQ(buf, ptr) ) {
-      _smal_buffer_mark_ptr(buf, referrer, ptr);
+      return _smal_buffer_mark_ptr(buf, referrer, ptr);
     }
   }
+  return 0;
+}
+
+static inline
+void _smal_mark_ptr_tail(void *referrer, void *ptr)
+{
+  do {
+    void *new_referrer = ptr;
+    ptr = _smal_mark_ptr(referrer, ptr);
+    referrer = new_referrer;
+  } while ( ptr );
 }
 
 /********************************************************************
@@ -888,18 +949,18 @@ void smal_mark_bindings(int n, void ***bindings)
 #define smal_mark_queue_mark_all() ((void) 0)
 void smal_mark_ptr(void *referrer, void *ptr)
 {
-  _smal_mark_ptr(referrer, ptr);
+  _smal_mark_ptr_tail(referrer, ptr);
 }
 void smal_mark_ptr_n(void *referrer, int n_ptrs, void **ptrs)
 {
-  while ( -- n_ptrs >= 0 )
-    _smal_mark_ptr(referrer, *(ptrs ++));
+  while ( -- n_ptrs >= 0 ) {
+    _smal_mark_ptr_tail(referrer, *(ptrs ++));
 }
 void smal_mark_bindings(int n, void ***bindings)
 {
   while ( -- n >= 0 ) {
     void *ptr = * *(bindings ++);
-    _smal_mark_ptr(0, ptr);
+    _smal_mark_ptr_tail(0, ptr);
   }
 }
 #endif
@@ -937,7 +998,7 @@ int smal_object_reachableQ(void *ptr)
 {
   smal_buffer *buf;
   // assert(in_collect);
-  buf = smal_ptr_to_buffer(ptr);
+  buf = smal_ptr_to_buffer(ptr, buffer_table_mark);
   if ( smal_likely(smal_buffer_ptr_is_in_rangeQ(buf, ptr)) )
     return ! ! smal_buffer_markQ(buf, ptr);
   else
@@ -961,7 +1022,7 @@ void *smal_buffer_alloc_object(smal_buffer *self)
 
     self->free_list = * (void**) ptr;
     smal_thread_rwlock_wrlock(&self->free_bits_lock);
-    smal_bitmap_clr_c(&self->free_bits, smal_buffer_i(self, ptr));
+    smal_bitmap_clr_c(&self->free_bits, smal_buffer_ptr_i(self, ptr));
     smal_thread_rwlock_unlock(&self->free_bits_lock);
 
     smal_thread_mutex_unlock(&self->free_list_mutex);
@@ -1027,8 +1088,8 @@ void smal_buffer_free_object(smal_buffer *self, void *ptr)
 {
   // assume free_bits and free_list mutexs are locked.
   // smal_thread_mutex_lock(&self->free_bits_mutex);
-  assert(! smal_bitmap_setQ(&self->free_bits, smal_buffer_i(self, ptr)));
-  smal_bitmap_set_c(&self->free_bits, smal_buffer_i(self, ptr));
+  assert(! smal_bitmap_setQ(&self->free_bits, smal_buffer_ptr_i(self, ptr)));
+  smal_bitmap_set_c(&self->free_bits, smal_buffer_ptr_i(self, ptr));
   // smal_thread_mutex_unlock(&self->free_bits_mutex);
 
   // Should we unlock free_bits and free_list?
@@ -1348,9 +1409,7 @@ void smal_collect_wait_for_sweep()
   smal_thread_join(sweep_thread);
 }
 
-
 /**********************************************/
-
 
 smal_type *smal_type_for_desc(smal_type_descriptor *desc)
 {
@@ -1368,9 +1427,9 @@ smal_type *smal_type_for_desc(smal_type_descriptor *desc)
     desc->object_alignment = sizeof(double);
 
   if ( ! desc->mark_func )
-    desc->mark_func = null_func;
+    desc->mark_func = null_mark_func;
   if ( ! desc->free_func )
-    desc->free_func = null_func;
+    desc->free_func = null_free_func;
   if ( ! desc->collections_per_sweep )
     desc->collections_per_sweep = 1; /* sweep on every collection. */
 
@@ -1538,41 +1597,38 @@ void smal_free(void *ptr)
 
   smal_debug(object_free, 2, "() @%p", ptr);
 
-  if ( smal_unlikely(buf = smal_ptr_to_buffer(ptr)) ) {
+  if ( smal_unlikely(buf = smal_ptr_to_buffer(ptr, buffer_table)) ) {
     smal_debug(object_free, 3, "ptr @%p => buf b@%p", ptr, buf);
     if ( smal_likely(smal_buffer_ptr_is_validQ(buf, ptr)) ) {
       assert(buf->page_id == smal_buffer_page_id(buf));
       smal_debug(object_free, 3, "ptr @%p is valid in buf b@%p", ptr, buf);
+
+      smal_thread_rwlock_wrlock(&alloc_lock);
+  
       smal_thread_mutex_lock(&buf->free_list_mutex);
       smal_thread_rwlock_wrlock(&buf->free_bits_lock);
       smal_buffer_free_object(buf, ptr);
       smal_thread_rwlock_unlock(&buf->free_bits_lock);
       smal_thread_mutex_unlock(&buf->free_list_mutex);
+
+      smal_thread_rwlock_unlock(&alloc_lock);
       error = 0;
     }
   }
+
 
   if ( smal_unlikely(error) ) abort();
 }
 
 /********************************************************************/
 
-int smal_each_object(int (*func)(smal_type *type, void *ptr, void *arg), void *arg)
+static
+int smal_each_object_list(smal_buffer_list_head *list, int (*func)(smal_type *type, void *ptr, void *arg), void *arg)
 {
   smal_buffer *buf;
   int result = 0;
 
-  if ( smal_unlikely(in_collect) ) abort();
-  if ( smal_unlikely(! initialized) ) initialize();
-
-  // ++ no_collect;
-
-  // fprintf(stderr, "  s_e_o: \n");
-  /* Pause smal_collect (writer) */
-  smal_thread_rwlock_rdlock(&alloc_lock);
-
-  smal_thread_rwlock_rdlock(&buffer_head_lock);
-  smal_dllist_each(&buffer_head, buf); {
+  smal_dllist_each(list, buf); {
     void *ptr, *alloc_ptr = smal_buffer_alloc_ptr(buf);
     // fprintf(stderr, "    s_e_o bh b@%p\n", buf);
     smal_thread_rwlock_rdlock(&buf->free_bits_lock);
@@ -1587,36 +1643,42 @@ int smal_each_object(int (*func)(smal_type *type, void *ptr, void *arg), void *a
     if ( smal_unlikely(result < 0) ) break;
     smal_thread_rwlock_unlock(&buf->free_bits_lock);
   } smal_dllist_each_end();
+
+  return result;
+}
+
+int smal_each_object(int (*func)(smal_type *type, void *ptr, void *arg), void *arg)
+{
+  int result = 0;
+
+  if ( smal_unlikely(in_collect) ) abort();
+  if ( smal_unlikely(! initialized) ) initialize();
+
+  // ++ no_collect;
+
+  // fprintf(stderr, "  s_e_o: \n");
+  /* Pause smal_collect (writer) */
+  smal_thread_rwlock_rdlock(&alloc_lock);
+
+  smal_thread_rwlock_rdlock(&buffer_head_lock);
+  result = smal_each_object_list((void*) &buffer_head, func, arg);
   smal_thread_rwlock_unlock(&buffer_head_lock);
 
-  if ( smal_unlikely(result < 0) ) return result;
+  if ( smal_unlikely(result < 0) ) goto done;
 
   smal_thread_rwlock_rdlock(&buffer_collecting_lock);
-  smal_dllist_each(&buffer_collecting, buf); {
-    void *ptr, *alloc_ptr = smal_buffer_alloc_ptr(buf);
-    // fprintf(stderr, "    s_e_o bc b@%p\n", buf);
-    smal_thread_rwlock_rdlock(&buf->free_bits_lock);
-    for ( ptr = buf->begin_ptr; ptr < alloc_ptr; ptr += smal_buffer_object_size(buf) ) {
-      if ( ! smal_buffer_freeQ(buf, ptr) ) {
-	smal_thread_rwlock_unlock(&buf->free_bits_lock);
-	result = func(buf->type, ptr, arg);
-	if ( smal_unlikely(result < 0) ) break;
-	smal_thread_rwlock_rdlock(&buf->free_bits_lock);
-      }
-    }
-    if ( smal_unlikely(result < 0) ) break;
-    smal_thread_rwlock_unlock(&buf->free_bits_lock);
-  } smal_dllist_each_end();
+  result = smal_each_object_list(&buffer_collecting, func, arg);
   smal_thread_rwlock_unlock(&buffer_collecting_lock);
 
+  done:
   smal_thread_rwlock_unlock(&alloc_lock);
-
   // -- no_collect;
   return result;
 }
 
 void smal_global_stats(smal_stats *stats)
 {
+  if ( smal_unlikely(! initialized) ) initialize();
   smal_thread_mutex_lock(&buffer_head.stats._mutex);
   *stats = buffer_head.stats;
   smal_thread_mutex_unlock(&buffer_head.stats._mutex);
@@ -1657,8 +1719,13 @@ static void _initialize()
   }
 
   memset(&buffer_head, 0, sizeof(buffer_head));
+  smal_dllist_init(&buffer_head);
+
   memset(&buffer_collecting, 0, sizeof(buffer_collecting));
+  smal_dllist_init(&buffer_collecting);
+
   memset(&type_head, 0, sizeof(type_head));
+  smal_dllist_init(&type_head);
 
   smal_thread_mutex_init(&_smal_debug_mutex);
   smal_thread_rwlock_init(&alloc_lock);
@@ -1666,19 +1733,19 @@ static void _initialize()
   smal_thread_rwlock_init(&buffer_head_lock);
   smal_thread_mutex_init(&buffer_head.stats._mutex);
   smal_thread_rwlock_init(&buffer_collecting_lock);
-  smal_thread_rwlock_init(&buffer_table_lock);
 
   smal_thread_lock_init(&_smal_collect_inner_lock);
 
-  smal_dllist_init(&buffer_head);
-  smal_dllist_init(&buffer_collecting);
-  smal_dllist_init(&type_head);
-
   page_id_min = 0; page_id_max = 0;
   page_id_min_max_valid = 0;
+
   buffer_table_size = 1;
   buffer_table =   malloc(sizeof(buffer_table[0]) * buffer_table_size);
   memset(buffer_table, 0, sizeof(buffer_table[0]) * buffer_table_size);
+  smal_thread_rwlock_init(&buffer_table_lock);
+
+  buffer_table_mark = buffer_table;
+  buffer_table_mark_size = buffer_table_size;
 
 #if SMAL_WRITE_BARRIER
   smal_write_barrier_init();
@@ -1710,6 +1777,7 @@ void smal_shutdown()
   if ( in_collect ) abort();
 
   ++ no_collect;
+  ++ in_shutdown;
 
   smal_dllist_each(&buffer_head, buf); {
     smal_buffer_free(buf);
@@ -1719,9 +1787,14 @@ void smal_shutdown()
     smal_type_free(type);
   } smal_dllist_each_end();
 
+  if ( buffer_table_mark != buffer_table ) {
+    free(buffer_table_mark);
+  }
+  buffer_table_mark = 0;
+
   free(buffer_table);
   buffer_table = 0;
-
+ 
   {
     static smal_thread_once zero = smal_thread_once_INIT;
     _initalized = zero;
@@ -1729,6 +1802,7 @@ void smal_shutdown()
   initialized = 0;
 
   -- no_collect;
+  -- in_shutdown;
 }
 
 
