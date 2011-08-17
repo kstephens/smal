@@ -181,7 +181,7 @@ void smal_collect(); /* Thread-safe. */
 void smal_collect_wait_for_sweep(); /* Thread-safe. */
 
 /* Mark pointers. */
-/** Users can call these method only during smal_collect(): */
+/** Users can call these methods only during smal_collect(): */
 void smal_mark_ptr(void *referrer, void *ptr); 
 void smal_mark_ptr_p(void *referrer, void **ptrp);
 void smal_mark_ptr_n(void *referrer, int n_ptrs, void **ptrs);
