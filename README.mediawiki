@@ -22,11 +22,11 @@ It does, however, optionally support:
 * Weak references.
 * Reference queues.
 * Finalizers.
-* Remembered Sets for Mostly Unchanging Object. (See below).
+* Remembered Sets for Mostly Unchanging Objects. (See below).
 
 == Main API ==
 
-* <code>smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free_func free_func)</code> locates or creates a new <code>smal_type</code> object for objects of a particular size, mark and free functions.
+* <code>smal_type_for_desc(smal_type_descriptor *desc)</code> locates or creates a new <code>smal_type</code> object for objects of a particular size, mark and free functions.
 * <code>smal_alloc(smal_type *type)</code> allocates a new object of <code>smal_type</code>.
 * <code>smal_mark_ptr(void * ptr)</code> marks a potential pointer.  This is called from within a <code>smal_type</code> <code>mark_func</code>.
 * <code>smal_collect()</code> starts a collection.
@@ -72,7 +72,7 @@ Objects are parceled, on-demand, from a <code>smal_buffer</code>, by incrementin
 Each <code>smal_buffer</code> keeps its own <code>free_list</code>.  
 A free bitmap is also maintained to avoid double-free during sweep.
 <code>smal_buffers</code> without active objects are <code>munmap</code>ed and returned to the OS after <code>smal_collect()</code>.
-Objects can be explicitly freed by <code>smal_free</code>.
+Objects can be explicitly freed by <code>smal_free(void *ptr)</code>.
 
 == Allocation Scheduling ==
 
@@ -96,12 +96,12 @@ Every potential pointer maps to a unique <code>page_id</code>, computed
 by dividing the pointer address by <code>smal_page_size</code>.
 
 Since every <code>mmap()</code>'ed page is always aligned to <code>smal_page_size</code>, 
-it is trivial to map a potential object pointer to a potential <code>smal_buffer*</code> or it's <code>page_id</code>.
+it is trivial to map a potential object pointer to a potential <code>page_id</code> and it's <code>smal_buffer*</code>.
 
 A non-colliding hash table mapping <code>page_id</code>s to <code>smal_buffer*</code>s is maintained.
 A lack of an table entry for a given <code>page_id</code>, means that any potential
 pointer mapping within the aligned <code>smal_page_size</code> region associated with the <code>page_id</code> 
-is not an object pointer allocated from a <code>smal_buffer</code>.
+is not a pointer to an object allocated from a <code>smal_buffer</code>.
 
 === Performance Characteristics ===
 
@@ -110,13 +110,13 @@ Because the table is guaranteed to be non-colliding, mapping an arbitrary pointe
 This operation takes 6 x86 instructions.
 
 If a <code>smal_buffer*</code> can be found for a potential pointer, the pointer must also be within the <code>smal_buffer</code>'s region between
-<code>begin_ptr</code> and <code>alloc_ptr</code> and must be aligned to <code>object_alignment</code>.
+<code>begin_ptr</code> and <code>alloc_ptr</code>.
 This operation takes 8 x86 instructions.
 
 === Issues ===
 
 * SMAL cannot service allocations larger than <code>smal_page_size - sizeof(smal_buffer) - object_alignment</code> or <code>smal_page_size - sizeof(void*) - object_alignment</code>, depending on the configuration.
-* The <code>page_id</code> hash table may become large and sparse when <code>mmap()</code> tends to not allocate <code>smal_buffer</code>s in a mostly contiguous fashion -- other active allocators (e.g.: <code>malloc()</code>) may cause holes in the address space consumed by SMAL.
+* The <code>page_id</code> hash table may become large and sparse when <code>mmap()</code> tends to not allocate <code>smal_buffer</code>s in a mostly contiguous fashion -- other active allocators (e.g.: <code>malloc()</code>) may cause holes in the address space <code>mmap</code>ped by SMAL.
 
 == Object Mark/Free Bits ==
 
@@ -140,8 +140,25 @@ Each <code>smal_buffer</code> maintains a free list.  Sweeping unused objects in
 
 == Mark Queues ==
 
-SMAL supports an optional mark queue to avoid C stack recursion in <code>mark_func</code>.  This is slightly slower than C recursion but will not cause stack overflows for threads with small C stacks.  The mark queue uses <code>malloc()/free()</code>.
-  
+SMAL supports an optional mark queue to avoid C stack recursion in <code>mark_func</code>.  This is slightly slower than C recursion but will reduce stack overflows for threads with small C stacks.  The mark queue uses <code>malloc()/free()</code>.
+
+== Mark Tail-Recursion ==
+
+The mark function returns a <code>void*</code>.  A non-zero return value will be continued for marking.  This allows the mark function to avoid tail recursion into the mark engine.  For example:
+
+<pre>
+typedef void *my_oop;
+typedef struct my_cons {
+  my_oop car, cdr;
+} my_cons;
+
+static void * my_cons_mark (void *ptr)
+{
+  smal_mark_ptr(ptr, ((my_cons *) ptr)->car);
+  return ((my_cons *) ptr)->cdr;
+}
+</pre>
+
 == Mark-Sweep ==
 
 The algorithms/data structures are as follows:
@@ -151,7 +168,6 @@ The algorithms/data structures are as follows:
 # Map a potential object pointer to a potential <code>page_id</code>.
 # Map a potential <code>page_id</code> a potential <code>smal_buffer*</code> using <code>buffer_table</code>.
 # Determine if object pointer within <code>smal_buffer</code>'s <code>smal_page</code> region where object allocations took place.
-# Determine if object pointer has proper alignment to the head of the object allocation.
 # Determine the mark bitmap offset.
 # If object is not already marked, 
 # Mark the object in the bitmap, and
