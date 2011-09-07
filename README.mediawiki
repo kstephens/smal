@@ -240,6 +240,7 @@ When enabled with threading support,
 SMAL attempts to use many smaller mutex and read/write lock regions to avoid long or global locks.  
 There is a single allocation read/write lock that is held to allow disabling of allocation from each buffer before collection starts.
 The multi-thread version is approx. 2 to 3 times slower single-thread version, when running only one thread.
+Obviously there is is room for improvement.
 
 == Object Enumeration ==
 
