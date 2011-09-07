@@ -166,7 +166,7 @@ The algorithms/data structures are as follows:
 === Mark a (potential) object ===
 
 # Map a potential object pointer to a potential <code>page_id</code>.
-# Map a potential <code>page_id</code> a potential <code>smal_buffer*</code> using <code>buffer_table</code>.
+# Map a potential <code>page_id</code> to a potential <code>smal_buffer*</code> using <code>buffer_table</code>.
 # Determine if object pointer within <code>smal_buffer</code>'s <code>smal_page</code> region where object allocations took place.
 # Determine the mark bitmap offset.
 # If object is not already marked, 
