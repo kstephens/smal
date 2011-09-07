@@ -99,7 +99,7 @@ Since every <code>mmap()</code>'ed page is always aligned to <code>smal_page_siz
 it is trivial to map a potential object pointer to a potential <code>page_id</code> and it's <code>smal_buffer*</code>.
 
 A non-colliding hash table mapping <code>page_id</code>s to <code>smal_buffer*</code>s is maintained.
-A lack of an table entry for a given <code>page_id</code>, means that any potential
+A lack of a table entry for a given <code>page_id</code>, means that any potential
 pointer mapping within the aligned <code>smal_page_size</code> region associated with the <code>page_id</code> 
 is not a pointer to an object allocated from a <code>smal_buffer</code>.
 
