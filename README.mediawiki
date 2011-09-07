@@ -28,12 +28,12 @@ It does, however, optionally support:
 
 * <code>smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free_func free_func)</code> locates or creates a new <code>smal_type</code> object for objects of a particular size, mark and free functions.
 * <code>smal_alloc(smal_type *type)</code> allocates a new object of <code>smal_type</code>.
-* <code>smal_mark_ptr(void * ptr)</code> marks a potental pointer.  This is called from within a <code>smal_type</code> <code>mark_func</code>.
+* <code>smal_mark_ptr(void * ptr)</code> marks a potential pointer.  This is called from within a <code>smal_type</code> <code>mark_func</code>.
 * <code>smal_collect()</code> starts a collection.
 
 == Data Structure Overview ==
 
-<code>smal_type</code> represents a user-data type of a fixed size, mark and free callbacks.
+<code>smal_type</code> represents a user-data type of a fixed size, with mark and free callbacks.
 
 <code>smal_page</code> represents an <code>mmap()</code> region of <code>smal_page_size</code> aligned to <code>smal_page_size</code>.
 
@@ -42,7 +42,7 @@ It does, however, optionally support:
 == Types ==
 
 <code>smal_type</code> defines the size of objects and other characteristics that will be allocated from one or more <code>smal_buffer</code>s.
-<code>mark_func</code> and <code>free_func</code> callback can be registered for each <code>smal_type</code>.
+<code>mark_func</code> and <code>free_func</code> callbacks can be registered for each <code>smal_type</code>.
 
 == Page Allocation ==
 
@@ -58,8 +58,8 @@ SMAL support two <code>smal_buffer</code> allocation options:
 * Use a portion at the head each page for the page's <code>smal_buffer</code> structure.
 * Allocate a <code>smal_buffer</code> structure using <code>malloc()</code> and store a pointer to it in the first word of the page.
 
-The former has better performance, since mapping between <code>smal_page*</code> and <code>smal_buffer*</code>, but bookeeping operations will dirty memory during allocation and collection.  This can cause unnessary copy-on-write effort in forked processes.
-The latter avoids page mutations during allocation and collections but has an addtional pointer dereference when mapping <code>smal_page*</code> pointers to <code>smal_buffer*</code> pointers.
+The former has better performance, since every <code>smal_page*</code> and its <code>smal_buffer*</code> is the same pointer, but bookkeeping operations will dirty pages during allocation and collection.  This can cause unnecessary copy-on-write effort in forked processes.
+The latter avoids page mutations during allocation and collections but has an additional pointer dereference when mapping <code>smal_page*</code> pointers to <code>smal_buffer*</code> pointers.
 
 == Object Allocation ==
 
@@ -67,7 +67,7 @@ Objects are allocated by <code>smal_alloc(smal_type*)</code>.   Note: objects ar
 
 Objects are parceled, on-demand, from a <code>smal_buffer</code>, by incrementing <code>alloc_ptr</code> by the <code>smal_type</code>'s fixed object size, <code>object_size</code>, starting at <code>begin_ptr</code> and terminating at <code>end_ptr</code>.  
 
-== Object Reclaimation ==
+== Object Reclamation ==
 
 Each <code>smal_buffer</code> keeps its own <code>free_list</code>.  
 A free bitmap is also maintained to avoid double-free during sweep.
@@ -76,7 +76,7 @@ Objects can be explicitly freed by <code>smal_free</code>.
 
 == Allocation Scheduling ==
 
-Since SMAL does not compact or relocate objects during collection, it attempts to allocate from the <code>smal_buffer</code> with the least amount of available objects (either unparceled or on the free list), assocated with the requested <code>smal_type</code>.
+Since SMAL does not compact or relocate objects during collection, it attempts to allocate from the <code>smal_buffer</code> with the least amount of available objects (either unparceled or on the free list), associated with the requested <code>smal_type</code>.
 
 == Collection Scheduling ==
 
@@ -116,14 +116,14 @@ This operation takes 8 x86 instructions.
 === Issues ===
 
 * SMAL cannot service allocations larger than <code>smal_page_size - sizeof(smal_buffer) - object_alignment</code> or <code>smal_page_size - sizeof(void*) - object_alignment</code>, depending on the configuration.
-* The <code>page_id</code> hash table may become large and sparse when <code>mmap()</code> tends to not allocate <code>smal_buffer</code>s in a mostly-contigious fashion -- other active allocators (e.g.: <code>malloc()</code>) may cause holes in the address space consumed by SMAL.
+* The <code>page_id</code> hash table may become large and sparse when <code>mmap()</code> tends to not allocate <code>smal_buffer</code>s in a mostly contiguous fashion -- other active allocators (e.g.: <code>malloc()</code>) may cause holes in the address space consumed by SMAL.
 
 == Object Mark/Free Bits ==
 
 Each <code>smal_buffer</code> maintains a mark bitmap and free bitmap indexable by every object parceled from the <code>smal_buffer</code>.
 
 Placing mark bits in a separate bitmap reduces memory overhead, esp. for <code>fork()</code>ed processes -- this protects
-copy-on-write pages from full mutation due to mark bit manipuations.
+copy-on-write pages from full mutation due to mark bit manipulations.
 
 An object's mark bitmap index is computed by dividing, the difference between its pointer and its <code>smal_buffer</code> <code>begin_ptr</code>, 
 by the size of the objects (<code>object_size</code>) allocated from the <code>smal_buffer</code>.
@@ -148,7 +148,7 @@ The algorithms/data structures are as follows:
 
 === Mark a (potential) object ===
 
-# Map a potental object pointer to a potential <code>page_id</code>.
+# Map a potential object pointer to a potential <code>page_id</code>.
 # Map a potential <code>page_id</code> a potential <code>smal_buffer*</code> using <code>buffer_table</code>.
 # Determine if object pointer within <code>smal_buffer</code>'s <code>smal_page</code> region where object allocations took place.
 # Determine if object pointer has proper alignment to the head of the object allocation.
@@ -168,7 +168,7 @@ SMAL supports designating a <code>smal_type</code> as containing mostly unchangi
 
 == Sweep Frequency ==
 
-Types can be created that will sweep objects only every N collections.  This should only be used for object types that are unlikely to ever become unreferenced during normal collection lifecycles.  This can be used in conjuntion with "Mostly Unchanging Objects" feature.
+Types can be created that will sweep objects only every N collections.  This should only be used for object types that are unlikely to ever become unreferenced during normal collection life-cycles.  This can be used in conjunction with "Mostly Unchanging Objects" feature.
 
 == Write Barrier ==
 
