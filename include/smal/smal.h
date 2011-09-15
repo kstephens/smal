@@ -79,6 +79,7 @@ struct smal_stats {
   size_t collection_n; /** number of collections. */
   size_t mmap_size; /** bytes mmap()ed. */
   size_t mmap_total; /** total bytes mmap()ed, may wrap. */
+  size_t malloc_overhead_size; /* bytes mmalloc()ed. */
   size_t buffer_mutations; /** mutations: valid only for buffers with dirty_write_barrier.  */
   smal_thread_mutex _mutex;
 };
@@ -269,7 +270,7 @@ void smal_debug_set_level(smal_debug_t dt, int value);
 #define smal_addr_page(PTR) ((void*)(((size_t) (PTR)) & ~smal_page_mask))
 
 #ifndef SMAL_SEGREGATE_BUFFER_FROM_PAGE
-#define SMAL_SEGREGATE_BUFFER_FROM_PAGE 0
+#define SMAL_SEGREGATE_BUFFER_FROM_PAGE 1
 #endif
 
 #if SMAL_SEGREGATE_BUFFER_FROM_PAGE

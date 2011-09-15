@@ -113,6 +113,10 @@ If a <code>smal_buffer*</code> can be found for a potential pointer, the pointer
 <code>begin_ptr</code> and <code>alloc_ptr</code>.
 This operation takes 8 x86 instructions.
 
+=== Space Overhead ===
+
+Preliminary size overhead is approximately 4.5% for 10,000,000 16-byte objects.
+
 === Issues ===
 
 * SMAL cannot service allocations larger than <code>smal_page_size - sizeof(smal_buffer) - object_alignment</code> or <code>smal_page_size - sizeof(void*) - object_alignment</code>, depending on the configuration.
