@@ -168,6 +168,8 @@ struct smal_buffer {
 
 extern int smal_debug_level;
 
+void smal_init(); /** Initialize smal. */
+
 smal_type *smal_type_for_desc(smal_type_descriptor *desc);
 smal_type *smal_type_for(size_t object_size, smal_mark_func mark_func, smal_free_func free_func); /** Deprecated. */
 void smal_type_free(smal_type *type);

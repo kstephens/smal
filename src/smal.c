@@ -26,7 +26,6 @@
 
 
 static int initialized;
-static void initialize();
 
 #ifdef smal_page_size
 size_t _smal_page_size = smal_page_size;
@@ -1431,7 +1430,7 @@ smal_type *smal_type_for_desc(smal_type_descriptor *desc)
 {
   smal_type *self;
 
-  if ( smal_unlikely(! initialized) ) initialize();
+  if ( smal_unlikely(! initialized) ) smal_init();
 
   /* must be big enough for free list next pointer. */
   if ( desc->object_size < sizeof(void*) )
@@ -1670,7 +1669,7 @@ int smal_each_object(int (*func)(smal_type *type, void *ptr, void *arg), void *a
   int result = 0;
 
   if ( smal_unlikely(in_collect) ) abort();
-  if ( smal_unlikely(! initialized) ) initialize();
+  if ( smal_unlikely(! initialized) ) smal_init();
 
   // ++ no_collect;
 
@@ -1696,7 +1695,7 @@ int smal_each_object(int (*func)(smal_type *type, void *ptr, void *arg), void *a
 
 void smal_global_stats(smal_stats *stats)
 {
-  if ( smal_unlikely(! initialized) ) initialize();
+  if ( smal_unlikely(! initialized) ) smal_init();
   smal_thread_mutex_lock(&buffer_head.stats._mutex);
   *stats = buffer_head.stats;
   stats->malloc_overhead_size = malloc_overhead_size;
@@ -1780,15 +1779,10 @@ static void _initialize()
     fprintf(stderr, "\n %s:%d %s(): DONE\n", __FILE__, __LINE__, __FUNCTION__);
   }
 }
-static
-void initialize()
-{
-  smal_thread_do_once(&_initalized, _initialize);
-}
 
 void smal_init()
 {
-  initialize();
+  smal_thread_do_once(&_initalized, _initialize);
 }
 
 void smal_shutdown()
