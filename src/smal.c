@@ -1810,10 +1810,12 @@ void smal_shutdown()
     smal_type_free(type);
   } smal_dllist_each_end();
 
-  if ( buffer_table_mark != buffer_table ) {
+  if ( buffer_table_mark && buffer_table_mark != buffer_table ) {
     free(buffer_table_mark);
+    malloc_overhead_size -= sizeof(buffer_table_mark[0]) * buffer_table_mark_size;
   }
   buffer_table_mark = 0;
+  buffer_table_mark_size = 0;
 
   free(buffer_table);
   malloc_overhead_size -= sizeof(buffer_table[0]) * buffer_table_size;
