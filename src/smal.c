@@ -818,7 +818,6 @@ void smal_buffer_free(smal_buffer *self)
   smal_bitmap_free(&self->mark_bits);
 
   smal_LOCK_STATS(lock);
-
   smal_UPDATE_STATS(capacity_n, -= self->stats.capacity_n);
   smal_UPDATE_STATS(alloc_n,    -= self->stats.alloc_n);
   smal_UPDATE_STATS(avail_n,    -= self->stats.avail_n);
@@ -826,7 +825,6 @@ void smal_buffer_free(smal_buffer *self)
   smal_UPDATE_STATS(free_n,     -= self->stats.free_n);
   smal_UPDATE_STATS(buffer_n,   -= 1);
   smal_UPDATE_STATS(mmap_size,  -= self->mmap_size);
-
   smal_LOCK_STATS(unlock);
 
   smal_thread_mutex_destroy(&self->stats._mutex);
