@@ -202,12 +202,13 @@ void smal_type_stats(smal_type *type, smal_stats *stats); /* thread-safe */
 
 /* smal_collect() callbacks: must be defined by users: */
 
-void smal_collect_inner_before(void *top_of_stack);
+/* in order of callback sequence: */
+void smal_collect_before_inner(void *top_of_stack);
 void smal_collect_before_mark();
+void smal_collect_mark_roots();
 void smal_collect_after_mark();
 void smal_collect_before_sweep();
 void smal_collect_after_sweep();
-void smal_collect_mark_roots();
 
 /* Low-level/extension functions */
 int smal_object_reachableQ(void *ptr);
