@@ -57,6 +57,41 @@ int smal_roots_add_global(smal_roots *roots)
   return result;
 }
 
+int smal_roots_remove_global(smal_roots *roots)
+{
+  int result = -1;
+  smal_roots *r = 0, **rp;
+
+  if ( ! initialized ) initialize();
+  smal_thread_mutex_lock(&global_roots_mutex);
+  rp = &global_roots;
+  while ( (r = *rp) ) {
+    int i, j;
+    int r_cleared = 0;
+    for ( i = 0; i < roots->_bindings_n; ++ i ) {
+      for ( j = 0; j < r->_bindings_n; ++ j ) {
+	if ( roots->_bindings[i] && roots->_bindings[i] == r->_bindings[j] ) {
+	  r->_bindings[j] = 0;
+	  ++ r_cleared;
+	  result = 0;
+	}
+      }
+    }
+    if ( r_cleared == r->_bindings_n ) {
+      // fprintf(stderr, "small_roots_remove_global(): free(%p)\n", (void*) r);
+      *rp = r->_next;
+      free(r->_bindings);
+      free(r);
+    } else {
+      rp = &(r->_next);
+    }
+  }
+  // fprintf(stderr, "small_roots_remove_global(): global_roots = %p\n", (void*) global_roots);
+
+  smal_thread_mutex_unlock(&global_roots_mutex);
+  return result;
+}
+
 static
 void mark_roots(smal_roots *roots)
 {

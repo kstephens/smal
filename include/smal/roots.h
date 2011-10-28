@@ -15,6 +15,8 @@ typedef struct smal_roots {
 
 /* Copies smal_roots* into global roots list. */
 int smal_roots_add_global(smal_roots *);
+int smal_roots_remove_global(smal_roots *);
+
 smal_roots *smal_roots_current();
 void smal_roots_set_current(smal_roots *);
 
