@@ -85,11 +85,16 @@ doc-clean :
 clean : doc-clean
 	rm -rf *.s *.dSYM *.o *.a src/*.o src/*.a t/*.t t/*.dSYM 
 
+TEST_FAILED = /bin/false
+
+test-interactive : all
+	$(MAKE) TEST_FAILED='gdb --args' test
+
 test : all $(TESTS_T)
-	set -ex ;\
-	for t in $(TESTS_T) ;\
+	@set -e; for t in $(TESTS_T) ;\
 	do \
-	  time $$t || gdb --args $$t ;\
+	  echo "$$t:" ;\
+	  time $$t >$$t.out 2>&1 || $(TEST_FAILED) $$t ;\
 	done
 
 valgrind : all $(TEST_T)

@@ -1631,7 +1631,6 @@ void smal_free(void *ptr)
     }
   }
 
-
   if ( smal_unlikely(error) ) abort();
 }
 
