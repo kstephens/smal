@@ -26,7 +26,6 @@
 
 
 static int initialized;
-static void initialize();
 
 #ifdef smal_page_size
 size_t _smal_page_size = smal_page_size;
@@ -57,9 +56,12 @@ const char *smal_stats_names[] = {
   "collection_n",
   "mmap_size",
   "mmap_total",
+  "malloc_overhead_size",
   "buffer_mutations",
   0
 };
+
+static size_t malloc_overhead_size;
 
 int smal_debug_level = 0;
 static smal_thread_mutex _smal_debug_mutex;
@@ -170,6 +172,7 @@ int smal_bitmap_init(smal_bitmap *self)
   assert(self->bits == 0);
   if ( ! (self->bits = malloc(self->bits_size)) )
     return -1;
+  malloc_overhead_size += self->bits_size;
   smal_bitmap_clr_all(self);
   return 0;
 }
@@ -179,6 +182,7 @@ void smal_bitmap_free(smal_bitmap *self)
 {
   if ( self->bits ) {
     free(self->bits);
+    malloc_overhead_size -= self->bits_size;
     self->bits = 0;
   }
 }
@@ -426,8 +430,12 @@ void smal_buffer_table_add(smal_buffer *self)
 
   buffer_table_size_new = (page_id_max - page_id_min) + 1;
 
-  buffer_table_new = malloc(sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1));
-  memset(buffer_table_new, 0, sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1));
+  {
+    size_t size = sizeof(buffer_table_new[0]) * (buffer_table_size_new + 1);
+    buffer_table_new = malloc(size);
+    malloc_overhead_size += size;
+    memset(buffer_table_new, 0, size);
+  }
 
 #if 0
   fprintf(stderr, "smal_buffer_table_add(%p): malloc([%lu]) = %p\n", self, (unsigned long) buffer_table_size_new, buffer_table_new);
@@ -450,11 +458,13 @@ void smal_buffer_table_add(smal_buffer *self)
       fprintf(stderr, "smal_buffer_table_add(%p): free(buffer_table_mark = %p)\n", self, buffer_table_mark);
 #endif
       free(buffer_table_mark);
+      malloc_overhead_size -= sizeof(buffer_table_mark[0]) * buffer_table_mark_size;
     }
 #if 0
     fprintf(stderr, "smal_buffer_table_add(%p): free(buffer_table = %p)\n", self, buffer_table);
 #endif
     free(buffer_table);
+    malloc_overhead_size -= sizeof(buffer_table[0]) * buffer_table_size;
     buffer_table_mark = buffer_table_new;
     buffer_table_mark_size = buffer_table_size_new;
   } else {
@@ -463,6 +473,7 @@ void smal_buffer_table_add(smal_buffer *self)
       fprintf(stderr, "smal_buffer_table_add(%p): free(buffer_table = %p)\n", self, buffer_table);
 #endif
       free(buffer_table);
+      malloc_overhead_size -= sizeof(buffer_table[0]) * buffer_table_size;
     }
   }
   buffer_table = buffer_table_new;
@@ -597,6 +608,7 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
 #if SMAL_SEGREGATE_BUFFER_FROM_PAGE
   if ( ! (self = malloc(sizeof(*self))) )
     goto done;
+  malloc_overhead_size += sizeof(*self);
   memset(self, 0, sizeof(*self));
 #else
   self = mmap_addr; 
@@ -655,6 +667,7 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
     assert(result == 0);
 #if SMAL_SEGREGATE_BUFFER_FROM_PAGE
     free(self);
+    malloc_overhead_size -= sizeof(*self);
 #endif
     self = 0;
     mmap_addr = 0;
@@ -805,7 +818,6 @@ void smal_buffer_free(smal_buffer *self)
   smal_bitmap_free(&self->mark_bits);
 
   smal_LOCK_STATS(lock);
-
   smal_UPDATE_STATS(capacity_n, -= self->stats.capacity_n);
   smal_UPDATE_STATS(alloc_n,    -= self->stats.alloc_n);
   smal_UPDATE_STATS(avail_n,    -= self->stats.avail_n);
@@ -813,7 +825,6 @@ void smal_buffer_free(smal_buffer *self)
   smal_UPDATE_STATS(free_n,     -= self->stats.free_n);
   smal_UPDATE_STATS(buffer_n,   -= 1);
   smal_UPDATE_STATS(mmap_size,  -= self->mmap_size);
-
   smal_LOCK_STATS(unlock);
 
   smal_thread_mutex_destroy(&self->stats._mutex);
@@ -833,6 +844,7 @@ void smal_buffer_free(smal_buffer *self)
 
 #if SMAL_SEGREGATE_BUFFER_FROM_PAGE
   free(self);
+  malloc_overhead_size -= sizeof(*self);
 #endif
 
   result = smal_munmap(mmap_addr, mmap_size);
@@ -1183,6 +1195,7 @@ void smal_buffer_sweep(smal_buffer *self)
 #if 0
   void **free_ptrs = malloc(sizeof(free_ptrs[0]) * self->object_capacity);
   void **free_ptrs_p = free_ptrs;
+  malloc_overhead_size += sizeof(free_ptrs[0]) * self->object_capacity;
 #endif
 
 #if SMAL_REMEMBERED_SET
@@ -1415,7 +1428,7 @@ smal_type *smal_type_for_desc(smal_type_descriptor *desc)
 {
   smal_type *self;
 
-  if ( smal_unlikely(! initialized) ) initialize();
+  if ( smal_unlikely(! initialized) ) smal_init();
 
   /* must be big enough for free list next pointer. */
   if ( desc->object_size < sizeof(void*) )
@@ -1442,6 +1455,7 @@ smal_type *smal_type_for_desc(smal_type_descriptor *desc)
   } smal_dllist_each_end();
 
   self = malloc(sizeof(*self));
+  malloc_overhead_size += sizeof(*self);
   memset(self, 0, sizeof(*self));
   self->type_id = ++ type_head.type_id;
   self->desc = *desc;
@@ -1491,6 +1505,7 @@ void smal_type_free(smal_type *self)
   smal_thread_mutex_destroy(&self->stats._mutex);
   
   free(self);
+  malloc_overhead_size -= sizeof(*self);
 }
 
 static
@@ -1652,7 +1667,7 @@ int smal_each_object(int (*func)(smal_type *type, void *ptr, void *arg), void *a
   int result = 0;
 
   if ( smal_unlikely(in_collect) ) abort();
-  if ( smal_unlikely(! initialized) ) initialize();
+  if ( smal_unlikely(! initialized) ) smal_init();
 
   // ++ no_collect;
 
@@ -1678,9 +1693,10 @@ int smal_each_object(int (*func)(smal_type *type, void *ptr, void *arg), void *a
 
 void smal_global_stats(smal_stats *stats)
 {
-  if ( smal_unlikely(! initialized) ) initialize();
+  if ( smal_unlikely(! initialized) ) smal_init();
   smal_thread_mutex_lock(&buffer_head.stats._mutex);
   *stats = buffer_head.stats;
+  stats->malloc_overhead_size = malloc_overhead_size;
   smal_thread_mutex_unlock(&buffer_head.stats._mutex);
 }
 
@@ -1740,8 +1756,12 @@ static void _initialize()
   page_id_min_max_valid = 0;
 
   buffer_table_size = 1;
-  buffer_table =   malloc(sizeof(buffer_table[0]) * buffer_table_size);
-  memset(buffer_table, 0, sizeof(buffer_table[0]) * buffer_table_size);
+  {
+    size_t size = sizeof(buffer_table[0]) * buffer_table_size;
+    buffer_table =   malloc(size);
+    memset(buffer_table, 0, size);
+    malloc_overhead_size += size;
+  }
   smal_thread_rwlock_init(&buffer_table_lock);
 
   buffer_table_mark = buffer_table;
@@ -1757,15 +1777,10 @@ static void _initialize()
     fprintf(stderr, "\n %s:%d %s(): DONE\n", __FILE__, __LINE__, __FUNCTION__);
   }
 }
-static
-void initialize()
-{
-  smal_thread_do_once(&_initalized, _initialize);
-}
 
 void smal_init()
 {
-  initialize();
+  smal_thread_do_once(&_initalized, _initialize);
 }
 
 void smal_shutdown()
@@ -1787,14 +1802,18 @@ void smal_shutdown()
     smal_type_free(type);
   } smal_dllist_each_end();
 
-  if ( buffer_table_mark != buffer_table ) {
+  if ( buffer_table_mark && buffer_table_mark != buffer_table ) {
     free(buffer_table_mark);
+    malloc_overhead_size -= sizeof(buffer_table_mark[0]) * buffer_table_mark_size;
   }
   buffer_table_mark = 0;
+  buffer_table_mark_size = 0;
 
   free(buffer_table);
+  malloc_overhead_size -= sizeof(buffer_table[0]) * buffer_table_size;
   buffer_table = 0;
- 
+  buffer_table_size = 0;
+
   {
     static smal_thread_once zero = smal_thread_once_INIT;
     _initalized = zero;
