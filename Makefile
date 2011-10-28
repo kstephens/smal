@@ -4,7 +4,11 @@
 INC_DIR=include/#
 
 CFLAGS_OPT = -O2 #
-CFLAGS_OPT = -O3 #
+# CFLAGS_OPT = -O3 #
+#src/smal.c: In function ‘smal_each_object’:
+#src/smal.c:1646: error: dereferencing pointer buffer_head.159 does break strict-aliasing rules
+#src/smal.c:1679: note: initialized from here
+
 # CFLAGS_OPT = #
 ifneq ($(ENABLE_PROF),)
 CFLAGS_PROF = -pg -DSMAL_PROF #
