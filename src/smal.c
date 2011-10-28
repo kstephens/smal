@@ -1675,7 +1675,7 @@ int smal_each_object(int (*func)(smal_type *type, void *ptr, void *arg), void *a
   smal_thread_rwlock_rdlock(&alloc_lock);
 
   smal_thread_rwlock_rdlock(&buffer_head_lock);
-  result = smal_each_object_list((void*) &buffer_head, func, arg);
+  result = smal_each_object_list((void*) &buffer_head, func, arg); // FIXME: This line prevents -O3 due to strict-aliasing rules.
   smal_thread_rwlock_unlock(&buffer_head_lock);
 
   if ( smal_unlikely(result < 0) ) goto done;
