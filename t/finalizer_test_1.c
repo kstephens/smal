@@ -44,7 +44,7 @@ extern int _smal_debug_mark;
 
 int main(int argc, char **argv)
 {
-  my_cons *x = 0, *y = 0;
+  my_cons *x = 0, *y = 0, *z = 0;
   smal_finalizer *fin = 0;
   smal_roots_3(x, y, fin);
 
@@ -53,6 +53,8 @@ int main(int argc, char **argv)
   fprintf(stderr, "  x = %p\n", x);
   y = smal_alloc(my_cons_type);
   fprintf(stderr, "  y = %p\n", y);
+  z = smal_alloc(my_cons_type);
+  fprintf(stderr, "  z = %p\n", z);
 
   fin = smal_finalizer_create(y, my_cons_finalizer);
   assert(fin->referred == (void*) y);
@@ -60,7 +62,9 @@ int main(int argc, char **argv)
   x->car = (my_oop) 1;
   x->cdr = 0;
   y->car = (my_oop) 2;
-  y->cdr = (my_oop) 0;
+  y->cdr = (my_oop) z;
+  z->car = (my_oop) 3;
+  z->cdr = 0;
 
   // _smal_debug_mark = 1;
   smal_collect();
@@ -69,32 +73,49 @@ int main(int argc, char **argv)
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
-    assert(stats.alloc_id == 2);
+    assert(stats.alloc_id == 3);
     assert(stats.free_id == 0);
   }
 
   // Direct link to y = 0.
   // assert finalizer was called.
+  // assert y and z were not freed, yet.
   expected_finalized_reference = y;
   y = 0;
   // _smal_debug_mark = 1;
   fprintf(stderr, "  finalized_reference = %p\n", expected_finalized_reference);
   smal_collect();
+  smal_collect_wait_for_sweep();
   assert(finalizer_calls == 1);
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
-    assert(stats.alloc_id == 2);
+    assert(stats.alloc_id == 3);
     assert(stats.free_id == 0);
   }
 
+  // Collect again: assert y and z were freed.
   smal_collect();
+  smal_collect_wait_for_sweep();
   assert(finalizer_calls == 1);
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
-    assert(stats.alloc_id == 2);
-    assert(stats.free_id == 1);
+    assert(stats.alloc_id == 3);
+    assert(stats.free_id == 2);
+  }
+
+  // Remove reference to x.
+  // Collect: assert x was also freed.
+  x = 0;
+  smal_collect();
+  smal_collect_wait_for_sweep();
+  assert(finalizer_calls == 1);
+  {
+    smal_stats stats = { 0 };
+    smal_global_stats(&stats);
+    assert(stats.alloc_id == 3);
+    assert(stats.free_id == 3);
   }
 
   smal_roots_end();

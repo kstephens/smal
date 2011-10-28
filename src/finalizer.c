@@ -59,7 +59,7 @@ static void add_finalized(smal_finalized *finalized)
 
 static void remove_finalized(smal_finalized *finalized)
 {
-  // referred_table_mutex is held.
+  // referred_table_mutex is held by -> referred_sweep -> smal_finalizer_after_mark.
   voidP_voidP_TableRemove(&referred_table, finalized->referred);
 }
 
