@@ -164,7 +164,7 @@ int main(int argc, char **argv)
     smal_stats stats = { 0 };
     smal_type_stats(smal_finalizer_type(), &stats);
     assert(stats.alloc_id == 1);
-    assert(stats.free_id == 0); // BUG?
+    assert(stats.free_id == 0); // fin is holding a reference.
   }
   {
     smal_stats stats = { 0 };
@@ -233,8 +233,7 @@ int main(int argc, char **argv)
     assert(stats.free_id == 3 + 3);
   }
 
-  fprintf(stderr, "Remove reference to x.\n");
-  // Collect: assert x was also freed.
+  fprintf(stderr, "Remove reference to x; Collect; Assert x was freed.\n");
   x = 0;
   smal_collect();
   smal_collect_wait_for_sweep();
