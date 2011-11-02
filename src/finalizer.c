@@ -158,7 +158,7 @@ smal_finalizer * smal_finalizer_create(void *ptr, void (*func)(smal_finalizer *f
 static
 void referred_sweeped(smal_finalized *finalized)
 {
-  fprintf(stderr, "    finalized %p => referred %p is unreachable\n", finalized, finalized->referred);
+  if ( _smal_finalizer_debug ) fprintf(stderr, "    finalized %p => referred %p is unreachable\n", finalized, finalized->referred);
   /* Prevent sweep of finalized and referred this time around. */
   smal_mark_ptr(0, finalized);
   smal_mark_ptr(0, finalized->referred);
