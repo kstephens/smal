@@ -257,7 +257,7 @@ See include/smal/reference.h.
 
 == Finalization ==
 
-SMAL contains an optional, thread-safe finalizer implementation.
+SMAL contains an optional, thread-safe, lazy finalizer implementation.
 See include/smal/finalizer.h.
 
 == Licensing ==
