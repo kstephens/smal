@@ -124,6 +124,8 @@ smal_finalizer * smal_finalizer_create(void *ptr, void (*func)(smal_finalizer *f
   smal_finalized *finalized = 0;
   smal_finalizer *finalizer;
 
+  if ( ! ptr ) return 0;
+
   if ( ! initialized ) initialize();
 
   smal_thread_mutex_lock(&referred_table_mutex);
@@ -155,25 +157,52 @@ smal_finalizer * smal_finalizer_create(void *ptr, void (*func)(smal_finalizer *f
   return finalizer;
 }
 
-smal_finalizer *smal_finalizer_copy_finalizers(void *ptr, void *to_ptr)
+smal_finalizer *smal_finalizer_remove_all(void *ptr)
 {
   smal_finalized *finalized = 0;
-  smal_finalizer *finalizer, *to_finalizer;
+  smal_finalizer *finalizer = 0;
 
   if ( ! initialized ) initialize();
 
   smal_thread_mutex_lock(&referred_table_mutex);
-  if ( ! (finalized = find_finalized_by_referred(ptr)) ) {
-    smal_thread_mutex_unlock(&referred_table_mutex);
-    return 0;
+  if ( (finalized = find_finalized_by_referred(ptr)) ) {
+    remove_finalized(finalized);
   }
   smal_thread_mutex_unlock(&referred_table_mutex);
 
-  to_finalizer = 0;
-  for ( finalizer = finalized->finalizers; finalizer; finalizer = finalizer->next ) {
-    to_finalizer = smal_finalizer_create(to_ptr, finalizer->func);
-    to_finalizer->data = finalizer->data;
+  if ( finalized ) {
+    smal_thread_mutex_lock(&finalized->mutex);
+    finalizer = finalized->finalizers;
+    finalized->finalizers = 0;
+    smal_thread_mutex_unlock(&finalized->mutex);
   }
+
+  return finalizer;
+}
+
+smal_finalizer *smal_finalizer_copy_finalizers(void *ptr, void *to_ptr)
+{
+  smal_finalized *finalized = 0;
+  smal_finalizer *finalizer = 0, *to_finalizer = 0;
+
+  if ( ! ptr || ! to_ptr || to_ptr == ptr )
+    return 0;
+
+  if ( ! initialized ) initialize();
+
+  smal_thread_mutex_lock(&referred_table_mutex);
+  finalized = find_finalized_by_referred(ptr);
+  smal_thread_mutex_unlock(&referred_table_mutex);
+
+  if ( finalized ) {
+    smal_thread_mutex_lock(&finalized->mutex);
+    for ( finalizer = finalized->finalizers; finalizer; finalizer = finalizer->next ) {
+      to_finalizer = smal_finalizer_create(to_ptr, finalizer->func);
+      to_finalizer->data = finalizer->data;
+    }
+    smal_thread_mutex_unlock(&finalized->mutex);
+  }
+
   return to_finalizer;
 }
 

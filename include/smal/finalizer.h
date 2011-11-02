@@ -16,7 +16,7 @@ struct smal_finalizer {
 };
 
 smal_finalizer * smal_finalizer_create(void *referred, void (*func)(smal_finalizer *finalizer));
-void smal_finalizer_remove(smal_finalizer *finalizer);
+smal_finalizer * smal_finalizer_remove_all(void *referred);
 smal_finalizer * smal_finalizer_copy_finalizers(void *ptr, void *to_ptr);
 
 smal_type *smal_finalizer_type();
