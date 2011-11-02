@@ -155,6 +155,28 @@ smal_finalizer * smal_finalizer_create(void *ptr, void (*func)(smal_finalizer *f
   return finalizer;
 }
 
+smal_finalizer *smal_finalizer_copy_finalizers(void *ptr, void *to_ptr)
+{
+  smal_finalized *finalized = 0;
+  smal_finalizer *finalizer, *to_finalizer;
+
+  if ( ! initialized ) initialize();
+
+  smal_thread_mutex_lock(&referred_table_mutex);
+  if ( ! (finalized = find_finalized_by_referred(ptr)) ) {
+    smal_thread_mutex_unlock(&referred_table_mutex);
+    return 0;
+  }
+  smal_thread_mutex_unlock(&referred_table_mutex);
+
+  to_finalizer = 0;
+  for ( finalizer = finalized->finalizers; finalizer; finalizer = finalizer->next ) {
+    to_finalizer = smal_finalizer_create(to_ptr, finalizer->func);
+    to_finalizer->data = finalizer->data;
+  }
+  return to_finalizer;
+}
+
 static
 void referred_sweeped(smal_finalized *finalized)
 {
