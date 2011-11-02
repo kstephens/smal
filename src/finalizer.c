@@ -180,7 +180,7 @@ smal_finalizer *smal_finalizer_remove_all(void *ptr)
   return finalizer;
 }
 
-smal_finalizer *smal_finalizer_copy_finalizers(void *ptr, void *to_ptr)
+smal_finalizer *smal_finalizer_copy_all(void *ptr, void *to_ptr)
 {
   smal_finalized *finalized = 0;
   smal_finalizer *finalizer = 0, *to_finalizer = 0;

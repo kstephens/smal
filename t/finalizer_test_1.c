@@ -131,6 +131,7 @@ int main(int argc, char **argv)
   smal_collect();
   smal_collect_wait_for_sweep();
   assert(finalizer_calls == 1);
+  finalizer_calls = 0;
   {
     smal_stats stats = { 0 };
     smal_type_stats(smal_finalized_type(), &stats);
@@ -153,7 +154,7 @@ int main(int argc, char **argv)
   fprintf(stderr, "Collect again: assert y and z were freed.\n");
   smal_collect();
   smal_collect_wait_for_sweep();
-  assert(finalizer_calls == 1);
+  assert(finalizer_calls == 0);
   {
     smal_stats stats = { 0 };
     smal_type_stats(smal_finalized_type(), &stats);
@@ -173,63 +174,79 @@ int main(int argc, char **argv)
     assert(stats.free_id == 3);
   }
 
-  fprintf(stderr, "Add finalizer to x; keep reference to x.\n");
+  fprintf(stderr, "Add finalizers to x; keep reference to x.\n");
   {
     smal_finalizer *f = smal_finalizer_create(x, my_cons_finalizer);
     f->data = (void*) 1;
     assert(f->referred == x);
   }
+  y = smal_alloc(my_cons_type);
+  fprintf(stderr, "  y = %p new\n", y);
   {
     smal_finalizer *f = smal_finalizer_create(x, my_cons_finalizer);
     f->data = (void*) 2;
     assert(f->referred == x);
   }
+  fprintf(stderr, "Copy x finalizers to y.\n");
+  {
+    smal_finalizer *f = smal_finalizer_copy_all(x, y);
+    assert(f->referred == y);
+    assert(f->data == (void*) 1);
+    assert(f->next != 0);
+    assert(f->next->referred == y);
+    assert(f->next->data == (void*) 2);
+    assert(f->next->next == 0);
+    f->data = (void*) 3;
+    f->next->data = (void*) 4;
+  }
   smal_collect();
   smal_collect_wait_for_sweep();
-  assert(finalizer_calls == 1);
+  assert(finalizer_calls == 0);
   {
     smal_stats stats = { 0 };
     smal_type_stats(smal_finalized_type(), &stats);
-    assert(stats.alloc_id == 2);
+    assert(stats.alloc_id == 3);
     assert(stats.free_id == 1);
   }
   {
     smal_stats stats = { 0 };
     smal_type_stats(smal_finalizer_type(), &stats);
-    assert(stats.alloc_id == 3);
+    assert(stats.alloc_id == 5);
     assert(stats.free_id == 0);
   }
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
-    assert(stats.alloc_id == 3 + 5);
+    assert(stats.alloc_id == 3 + 9);
     assert(stats.free_id == 3);
   }
 
-  fprintf(stderr, "Remove finalizers to x; keep reference to x.\n");
+  fprintf(stderr, "Remove finalizers from x and y; keep reference to x; y == 0.\n");
+  y = 0;
   {
     smal_finalizer *f = smal_finalizer_remove_all(x);
     assert(f != 0);
   }
   smal_collect();
   smal_collect_wait_for_sweep();
-  assert(finalizer_calls == 1);
+  assert(finalizer_calls == 2);
+  finalizer_calls = 0;
   {
     smal_stats stats = { 0 };
     smal_type_stats(smal_finalized_type(), &stats);
-    assert(stats.alloc_id == 2);
-    assert(stats.free_id == 2);
-  }
-  {
-    smal_stats stats = { 0 };
-    smal_type_stats(smal_finalizer_type(), &stats);
     assert(stats.alloc_id == 3);
     assert(stats.free_id == 2);
   }
   {
     smal_stats stats = { 0 };
+    smal_type_stats(smal_finalizer_type(), &stats);
+    assert(stats.alloc_id == 5);
+    assert(stats.free_id == 2);
+  }
+  {
+    smal_stats stats = { 0 };
     smal_global_stats(&stats);
-    assert(stats.alloc_id == 3 + 5);
+    assert(stats.alloc_id == 3 + 9);
     assert(stats.free_id == 3 + 3);
   }
 
@@ -237,48 +254,48 @@ int main(int argc, char **argv)
   x = 0;
   smal_collect();
   smal_collect_wait_for_sweep();
-  assert(finalizer_calls == 1);
+  assert(finalizer_calls == 0); // no x finalizers exist on x anymore.
   {
     smal_stats stats = { 0 };
     smal_type_stats(smal_finalized_type(), &stats);
-    assert(stats.alloc_id == 2);
-    assert(stats.free_id == 2);
+    assert(stats.alloc_id == 3);
+    assert(stats.free_id == 3);
   }
   {
     smal_stats stats = { 0 };
     smal_type_stats(smal_finalizer_type(), &stats);
-    assert(stats.alloc_id == 3);
-    assert(stats.free_id == 2);
+    assert(stats.alloc_id == 5);
+    assert(stats.free_id == 4);
   }
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
-    assert(stats.alloc_id == 3 + 5);
-    assert(stats.free_id == 3 + 4);
+    assert(stats.alloc_id == 3 + 9);
+    assert(stats.free_id == 3 + 8);
   }
 
   fprintf(stderr, "Final sweep: remove reference to finalizer\n");
   fin = 0;
   smal_collect();
   smal_collect_wait_for_sweep();
-  assert(finalizer_calls == 1);
+  assert(finalizer_calls == 0);
   {
     smal_stats stats = { 0 };
     smal_type_stats(smal_finalized_type(), &stats);
-    assert(stats.alloc_id == 2);
-    assert(stats.free_id == 2);
-  }
-  {
-    smal_stats stats = { 0 };
-    smal_type_stats(smal_finalizer_type(), &stats);
     assert(stats.alloc_id == 3);
     assert(stats.free_id == 3);
   }
   {
     smal_stats stats = { 0 };
+    smal_type_stats(smal_finalizer_type(), &stats);
+    assert(stats.alloc_id == 5);
+    assert(stats.free_id == 5);
+  }
+  {
+    smal_stats stats = { 0 };
     smal_global_stats(&stats);
-    assert(stats.alloc_id == 3 + 5);
-    assert(stats.free_id == 3 + 5);
+    assert(stats.alloc_id == 3 + 9);
+    assert(stats.free_id == 3 + 9);
   }
 
   smal_roots_end();
