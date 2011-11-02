@@ -8,8 +8,6 @@
 #include "smal/thread.h"
 #include "smal/assert.h"
 
-// #include <stdlib.h> /* malloc(), free() */
-// #include <string.h> /* memcpy() */
 #include <stdio.h>
 
 #include "hash/voidP_voidP_Table.h"
@@ -314,7 +312,6 @@ int smal_finalizer_sweep_some(int n)
       finalized->finalizers = f->next;
       f->next = 0;
       f->func = 0;
-      // free(f);
       smal_thread_mutex_unlock(&finalized->mutex);
       if ( _smal_finalizer_debug ) fprintf(stderr, "  smal_finalizer_sweep_some(%d): finalized %p: removed finalizer %p\n", 
 	      n, finalized, f);
@@ -343,7 +340,6 @@ int smal_finalizer_sweep_some(int n)
       smal_finalized *f = finalized;
       finalized = f->next;
       f->next = 0;
-      // free(f);
     }
     finalized_queue = finalized;
   }
