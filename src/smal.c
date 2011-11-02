@@ -870,6 +870,8 @@ smal_buffer *smal_buffer_from_ptr(void *ptr)
 #define smal_buffer_freeQ(BUF, PTR)				\
   smal_bitmap_setQ(&(BUF)->free_bits, smal_buffer_ptr_i(BUF, PTR))
 
+void * _smal_mark_referrer;
+
 static inline
 void * _smal_buffer_mark_ptr(smal_buffer *self, void *referrer, void *ptr)
 {
@@ -906,6 +908,7 @@ void * _smal_buffer_mark_ptr(smal_buffer *self, void *referrer, void *ptr)
 #ifndef smal_MARK_FUNC
 #define smal_MARK_FUNC(ptr) self->type->desc.mark_func(ptr)
 #endif
+    _smal_mark_referrer = referrer;
     ptr = smal_MARK_FUNC(ptr);
     smal_after_mark_func();
     return ptr;
