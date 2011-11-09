@@ -53,7 +53,7 @@ If this buffer not aligned, SMAL <code>munmap()</code>s the attempted buffer and
 
 == Buffer Allocation ==
 
-SMAL support two <code>smal_buffer</code> allocation options: 
+SMAL supports two <code>smal_buffer</code> allocation options: 
 
 * Use a portion at the head each page for the page's <code>smal_buffer</code> structure.
 * Allocate a <code>smal_buffer</code> structure using <code>malloc()</code> and store a pointer to it in the first word of the page.
@@ -243,7 +243,7 @@ The collection should only need to stop the world during marking and should be a
 When enabled with threading support, 
 SMAL attempts to use many smaller mutex and read/write lock regions to avoid long or global locks.  
 There is a single allocation read/write lock that is held to allow disabling of allocation from each buffer before collection starts.
-The multi-thread version is approx. 2 to 3 times slower single-thread version, when running only one thread.
+The multi-thread version is approx. 2 to 3 times slower than the single-thread version, when running only one thread.
 Obviously there is is room for improvement.
 
 == Object Enumeration ==
