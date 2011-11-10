@@ -8,6 +8,15 @@
 
 static my_cons *global;
 
+static my_cons *other_global;
+static void *cb_handle;
+static
+void root_callback(void *data)
+{
+  assert(data == &other_global);
+  smal_mark_ptr(0, other_global);
+}
+
 static
 void run_test()
 {
@@ -69,7 +78,19 @@ void run_test()
     assert(stats.free_id == 1);
   }
 
+  other_global = global;
   x = y = global = 0;
+  smal_collect();
+  my_print_stats(__LINE__);
+  {
+    smal_stats stats = { 0 };
+    smal_global_stats(&stats);
+    assert(stats.alloc_id == 2);
+    assert(stats.free_id == 1);
+  }
+
+  smal_roots_remove_callback(cb_handle);
+  cb_handle = 0;
   smal_collect();
   my_print_stats(__LINE__);
   {
@@ -84,6 +105,7 @@ void run_test()
 
 int main(int argc, char **argv)
 {
+  cb_handle = smal_roots_add_callback(root_callback, &other_global);
   smal_roots_1(global);
   smal_roots_end_global();
 

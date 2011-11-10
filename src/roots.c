@@ -6,6 +6,8 @@
 #include "smal/smal.h"
 #include "smal/thread.h"
 #include "smal/roots.h"
+#include "smal/callback.h"
+#include "smal/dllist.h"
 #include "smal/assert.h"
 
 #include <stdlib.h> /* malloc(), free() */
@@ -14,12 +16,16 @@
 
 static smal_roots *global_roots;
 static smal_thread_mutex global_roots_mutex;
+static smal_callback callbacks;
+static smal_thread_mutex callbacks_mutex;
 
 static int initialized;
 static smal_thread_once _initalized = smal_thread_once_INIT;
 static void _initialize()
 {
   smal_thread_mutex_init(&global_roots_mutex);
+  smal_dllist_init(&callbacks);
+  smal_thread_mutex_init(&callbacks_mutex);
 }
 static void initialize()
 {
@@ -122,7 +128,29 @@ int mark_thread(smal_thread *t, void *arg)
 
 void smal_roots_mark_chain()
 {
+  if ( ! initialized ) initialize();
+  smal_thread_mutex_lock(&callbacks_mutex);
+  smal_callback_invoke(&callbacks);
+  smal_thread_mutex_unlock(&callbacks_mutex);
   mark_roots(global_roots);
   smal_thread_each(mark_thread, 0);
+}
+
+void *smal_roots_add_callback(smal_callback_DECL((*func)), void *data)
+{
+  void *cb;
+  if ( ! initialized ) initialize();
+  smal_thread_mutex_lock(&callbacks_mutex);
+  cb = smal_callback_add(&callbacks, func, data);
+  smal_thread_mutex_unlock(&callbacks_mutex);
+  return cb;
+}
+
+void smal_roots_remove_callback(void *cb)
+{
+  if ( ! initialized ) initialize();
+  smal_thread_mutex_lock(&callbacks_mutex);
+  smal_callback_remove(&callbacks, cb);
+  smal_thread_mutex_unlock(&callbacks_mutex);
 }
 

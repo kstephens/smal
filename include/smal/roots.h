@@ -2,16 +2,16 @@
   SMAL
   Copyright (c) 2011 Kurt A. Stephens
 */
+#ifndef _SMAL_ROOTS_H
+#define _SMAL_ROOTS_H
 
-#ifndef _SMAL_EXPLICIT_ROOTS_H
-#define _SMAL_EXPLICIT_ROOTS_H
+#include "smal/callback.h"
 
 typedef struct smal_roots {
   void **_bindings;
   int _bindings_n;
   struct smal_roots *_next;
 } smal_roots;
-
 
 /* Copies smal_roots* into global roots list. */
 int smal_roots_add_global(smal_roots *);
@@ -46,5 +46,9 @@ void smal_roots_set_current(smal_roots *);
   { void *_bindings[] = { &_1, &_2, &_3, &_4, &_5 }; smal_roots_begin(5)
 
 void smal_roots_mark_chain();
+
+/* Callbacks for roots from smal_roots_mark_chain(). */
+void *smal_roots_add_callback(smal_callback_DECL((*func)), void *data);
+void smal_roots_remove_callback(void *cb);
 
 #endif
