@@ -923,6 +923,14 @@ void * _smal_mark_ptr(void *referrer, void *ptr)
   if ( (buf = smal_ptr_to_buffer(ptr, buffer_table_mark)) ) {
     // smal_debug(mark, 5, "ptr @%p => buf @%p", ptr, buf);
     if ( smal_buffer_ptr_is_validQ(buf, ptr) ) {
+      // Realign interior ptrs.
+#if 0
+      int offset;
+      if ( (offset = (ptr - buf->begin_ptr) % buf->object_size) != 0 ) {
+	fprintf(stderr, "  Align @%p - %d to @%p", ptr, offset, ptr - offset);
+      }
+#endif
+      ptr = buf->begin_ptr + ((ptr - buf->begin_ptr) / buf->object_size) * buf->object_size;
       return _smal_buffer_mark_ptr(buf, referrer, ptr);
     }
   }
@@ -984,7 +992,6 @@ static inline
 void _smal_mark_ptr_range(void *referrer, void *ptr, void *ptr_end)
 {
   // fprintf(stderr, "   smpr [@%p, @%p] ALIGNED\n", ptr, ptr_end);
-
   while ( ptr < ptr_end ) {
     void *p = *(void**) ptr;
     // fprintf(stderr, "     smpr *@%p = @%p\n", ptr, p);
@@ -1001,10 +1008,8 @@ void smal_mark_ptr_range(void *referrer, void *ptr, void *ptr_end)
     ptr_end = ptr;
     ptr = tmp;
   }
-
   smal_ALIGN(ptr, __alignof__(void*));
   ptr_end -= sizeof(void*) - 1;
-
   _smal_mark_ptr_range(referrer, ptr, ptr_end);
 }
 
@@ -1029,7 +1034,7 @@ void *smal_buffer_alloc_object(smal_buffer *self)
 
   if ( smal_unlikely(smal_thread_lock_test(&self->alloc_disabled)) )
     return 0;
-  
+
   smal_thread_mutex_lock(&self->free_list_mutex);
   if ( smal_likely((ptr = self->free_list)) ) {
     // fprintf(stderr, "  t@%p b@%p free_n %lu => @%p\n", smal_thread_self(), self, (unsigned long) self->stats.free_n, ptr);
