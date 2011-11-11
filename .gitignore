@@ -8,3 +8,5 @@ t/*.dSYM
 doc/*.log
 doc/html/
 doc/latex/
+lib/
+

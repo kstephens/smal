@@ -64,6 +64,8 @@ src/hash/voidP_Table.o : src/hash/*.c src/hash/*.h src/hash/*.def
 $(SRC_LIB) : $(O_FILES)
 	rm -f $@
 	ar -rs $@ $(O_FILES)
+	mkdir -p lib
+	cp -p $@ lib/
 
 $(O_FILES) : $(H_FILES)
 
@@ -83,7 +85,7 @@ doc-clean :
 	rm -rf doc/html/ doc/latex/
 
 clean : doc-clean
-	rm -rf *.s *.dSYM *.o *.a src/*.o src/*.a t/*.t t/*.dSYM 
+	rm -rf *.s *.dSYM *.o *.a src/*.o src/*.a t/*.t t/*.dSYM lib/*
 
 TEST_FAILED = /bin/false
 
