@@ -1295,7 +1295,7 @@ void _smal_collect_inner()
 
   if ( no_collect || in_collect ) return;
 
-  if ( smal_thread_lock_lock(&_smal_collect_inner_lock) ) {
+  if ( ! smal_thread_lock_lock(&_smal_collect_inner_lock) ) {
  
   smal_collect_before_mark();
 
