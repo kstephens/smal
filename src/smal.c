@@ -221,10 +221,15 @@ static smal_thread_rwlock alloc_lock;
 static smal_type type_head;
 static smal_thread_mutex type_head_mutex;
 
-/* global list of all smal_buffers. */
+/* Placeholder for global buffer data. */
 static smal_buffer buffer_head;
 static smal_thread_rwlock buffer_head_lock;
 
+/* global list of all smal_buffers. */
+static smal_buffer_list_head buffer_list;
+static smal_thread_rwlock buffer_list_lock;
+
+/* global list of all smal_buffers that are currently under collection. */
 static smal_buffer_list_head buffer_collecting;
 static smal_thread_rwlock buffer_collecting_lock;
 
@@ -370,8 +375,8 @@ void _smal_mark_ptr_tail(void *, void*);
 void smal_buffer_print_all(smal_buffer *self, const char *action)
 {
   smal_buffer *buf;
-  fprintf(stderr, "  %s b@%p:\n    buffer_head { ", action, self);
-  smal_dllist_each(&buffer_head, buf); {
+  fprintf(stderr, "  %s b@%p:\n    buffer_list { ", action, self);
+  smal_dllist_each(&buffer_list, buf); {
     fprintf(stderr, " @%p, ", buf);
   } smal_dllist_each_end();
   fprintf(stderr, "}\n");
@@ -407,14 +412,14 @@ void smal_buffer_table_add(smal_buffer *self)
     assert(page_id_min != 0);
     assert(page_id_max != 0);
 
-    smal_thread_rwlock_rdlock(&buffer_head_lock);
-    smal_dllist_each(&buffer_head, buf); {
+    smal_thread_rwlock_rdlock(&buffer_list_lock);
+    smal_dllist_each(&buffer_list, buf); {
       if ( page_id_min > smal_buffer_page_id(buf) )
 	page_id_min = smal_buffer_page_id(buf);
       else if ( page_id_max < smal_buffer_page_id(buf) )
 	page_id_max = smal_buffer_page_id(buf);
     } smal_dllist_each_end();
-    smal_thread_rwlock_unlock(&buffer_head_lock);
+    smal_thread_rwlock_unlock(&buffer_list_lock);
 
     smal_thread_rwlock_rdlock(&buffer_collecting_lock);
     smal_dllist_each(&buffer_collecting, buf); {
@@ -485,11 +490,11 @@ void smal_buffer_table_add(smal_buffer *self)
 
   smal_thread_rwlock_unlock(&buffer_table_lock);
 
-  smal_thread_rwlock_wrlock(&buffer_head_lock);
+  smal_thread_rwlock_wrlock(&buffer_list_lock);
   smal_dllist_init(self);
-  smal_dllist_insert(&buffer_head, self);
+  smal_dllist_insert(&buffer_list, self);
   // smal_buffer_print_all(self, "add");
-  smal_thread_rwlock_unlock(&buffer_head_lock);
+  smal_thread_rwlock_unlock(&buffer_list_lock);
   
   smal_debug(all, 3, "buffer_table_size = %d", (int) buffer_table_size);
 }
@@ -513,10 +518,10 @@ void smal_buffer_table_remove(smal_buffer *self)
 
   smal_thread_rwlock_unlock(&buffer_table_lock);
 
-  // smal_thread_rwlock_wrlock(&buffer_head_lock);
+  // smal_thread_rwlock_wrlock(&buffer_list_lock);
   smal_dllist_delete(self); /* Remove from global buffer list. */
   // smal_buffer_print_all(self, "remove");
-  // smal_thread_rwlock_unlock(&buffer_head_lock);
+  // smal_thread_rwlock_unlock(&buffer_list_lock);
 }
 
 static inline
@@ -1315,14 +1320,14 @@ void _smal_collect_inner()
 
   ++ buffer_head.stats.collection_n;
 
-  smal_thread_rwlock_wrlock(&buffer_head_lock);
+  smal_thread_rwlock_wrlock(&buffer_list_lock);
   smal_thread_rwlock_wrlock(&buffer_collecting_lock);
 
   /* Move all active buffers to buffer_collecting. */
-  smal_dllist_append(&buffer_collecting, &buffer_head);
-  // smal_buffer_print_all(0, "buffer_head -> buffer_collecting");
-  // assert(buffer_head.next == (void *) &buffer_head);
-  // assert(buffer_head.prev == (void *) &buffer_head);
+  smal_dllist_append(&buffer_collecting, &buffer_list);
+  // smal_buffer_print_all(0, "buffer_list -> buffer_collecting");
+  // assert(buffer_list.next == (void *) &buffer_list);
+  // assert(buffer_list.prev == (void *) &buffer_list);
 
   /* Pause collecting for each buffer, prepare for marking. */
   smal_dllist_each(&buffer_collecting, buf); {
@@ -1330,7 +1335,7 @@ void _smal_collect_inner()
   } smal_dllist_each_end();
 
   smal_thread_rwlock_unlock(&buffer_collecting_lock);
-  smal_thread_rwlock_unlock(&buffer_head_lock);
+  smal_thread_rwlock_unlock(&buffer_list_lock);
 
   /* Allocation can resume in other threads, using new blocks. */
   smal_thread_rwlock_unlock(&alloc_lock);
@@ -1393,10 +1398,10 @@ void *_smal_collect_sweep_buffers(void *arg)
   } smal_dllist_each_end();
 
   /* Move all remaining buffers back to active buffers. */
-  smal_thread_rwlock_wrlock(&buffer_head_lock);
-  smal_dllist_append(&buffer_head, &buffer_collecting);
-  // smal_buffer_print_all(0, "buffer_head <- buffer_collecting");
-  smal_thread_rwlock_unlock(&buffer_head_lock);
+  smal_thread_rwlock_wrlock(&buffer_list_lock);
+  smal_dllist_append(&buffer_list, &buffer_collecting);
+  // smal_buffer_print_all(0, "buffer_list <- buffer_collecting");
+  smal_thread_rwlock_unlock(&buffer_list_lock);
 
   -- in_sweep;
   smal_thread_rwlock_unlock(&buffer_collecting_lock);
@@ -1645,12 +1650,11 @@ void smal_free(void *ptr)
 /********************************************************************/
 
 static
-int smal_each_object_list(void *x, int (*func)(smal_type *type, void *ptr, void *arg), void *arg)
+int smal_each_object_list(smal_buffer_list_head *list, int (*func)(smal_type *type, void *ptr, void *arg), void *arg)
 {
-  smal_buffer_list_head *list = x;
-  smal_buffer *buf;
   int result = 0;
-
+  // smal_buffer_list_head *list = (smal_buffer_list_head *)x;
+  smal_buffer *buf;
   smal_dllist_each(list, buf); {
     void *ptr, *alloc_ptr = smal_buffer_alloc_ptr(buf);
     // fprintf(stderr, "    s_e_o bh b@%p\n", buf);
@@ -1666,7 +1670,6 @@ int smal_each_object_list(void *x, int (*func)(smal_type *type, void *ptr, void 
     if ( smal_unlikely(result < 0) ) break;
     smal_thread_rwlock_unlock(&buf->free_bits_lock);
   } smal_dllist_each_end();
-
   return result;
 }
 
@@ -1683,9 +1686,9 @@ int smal_each_object(int (*func)(smal_type *type, void *ptr, void *arg), void *a
   /* Pause smal_collect (writer) */
   smal_thread_rwlock_rdlock(&alloc_lock);
 
-  smal_thread_rwlock_rdlock(&buffer_head_lock);
-  result = smal_each_object_list((void*) &buffer_head, func, arg); // FIXME: This line prevents -O3 due to strict-aliasing rules.
-  smal_thread_rwlock_unlock(&buffer_head_lock);
+  smal_thread_rwlock_rdlock(&buffer_list_lock);
+  result = smal_each_object_list(&buffer_list, func, arg);
+  smal_thread_rwlock_unlock(&buffer_list_lock);
 
   if ( smal_unlikely(result < 0) ) goto done;
 
@@ -1745,6 +1748,9 @@ static void _initialize()
   memset(&buffer_head, 0, sizeof(buffer_head));
   smal_dllist_init(&buffer_head);
 
+  memset(&buffer_list, 0, sizeof(buffer_list));
+  smal_dllist_init(&buffer_list);
+
   memset(&buffer_collecting, 0, sizeof(buffer_collecting));
   smal_dllist_init(&buffer_collecting);
 
@@ -1756,6 +1762,7 @@ static void _initialize()
   smal_thread_mutex_init(&type_head_mutex);
   smal_thread_rwlock_init(&buffer_head_lock);
   smal_thread_mutex_init(&buffer_head.stats._mutex);
+  smal_thread_rwlock_init(&buffer_list_lock);
   smal_thread_rwlock_init(&buffer_collecting_lock);
 
   smal_thread_lock_init(&_smal_collect_inner_lock);
@@ -1802,7 +1809,7 @@ void smal_shutdown()
   ++ no_collect;
   ++ in_shutdown;
 
-  smal_dllist_each(&buffer_head, buf); {
+  smal_dllist_each(&buffer_list, buf); {
     smal_buffer_free(buf);
   } smal_dllist_each_end();
 

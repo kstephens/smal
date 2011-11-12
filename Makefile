@@ -1,13 +1,12 @@
 # SMAL
 # Copyright (c) 2011 Kurt A. Stephens
 
+UNAME_S:=$(shell uname -s 2>/dev/null)#
+
 INC_DIR=include/#
 
-CFLAGS_OPT = -O2 #
-# CFLAGS_OPT = -O3 #
-#src/smal.c: In function ‘smal_each_object’:
-#src/smal.c:1646: error: dereferencing pointer buffer_head.159 does break strict-aliasing rules
-#src/smal.c:1679: note: initialized from here
+CFLAGS_OPT = -O3 #
+#CFLAGS_OPT = -O2 #
 
 # CFLAGS_OPT = #
 ifneq ($(ENABLE_PROF),)
