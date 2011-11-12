@@ -1645,8 +1645,9 @@ void smal_free(void *ptr)
 /********************************************************************/
 
 static
-int smal_each_object_list(smal_buffer_list_head *list, int (*func)(smal_type *type, void *ptr, void *arg), void *arg)
+int smal_each_object_list(void *x, int (*func)(smal_type *type, void *ptr, void *arg), void *arg)
 {
+  smal_buffer_list_head *list = x;
   smal_buffer *buf;
   int result = 0;
 
