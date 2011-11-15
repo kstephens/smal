@@ -6,6 +6,7 @@ UNAME_S:=$(shell uname -s 2>/dev/null)#
 INC_DIR=include/#
 
 CFLAGS_OPT = -O3 #
+CFLAGS_OPT = -fast #
 #CFLAGS_OPT = -O2 #
 
 # CFLAGS_OPT = #
