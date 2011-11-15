@@ -1629,7 +1629,7 @@ void smal_free(void *ptr)
   if ( smal_unlikely(buf = smal_ptr_to_buffer(ptr, buffer_table)) ) {
     smal_debug(object_free, 3, "ptr @%p => buf b@%p", ptr, buf);
     if ( smal_likely(smal_buffer_ptr_is_validQ(buf, ptr)) ) {
-      assert(buf->page_id == smal_buffer_page_id(buf));
+      // assert(buf->page_id == smal_buffer_page_id(buf));
       smal_debug(object_free, 3, "ptr @%p is valid in buf b@%p", ptr, buf);
 
       smal_thread_rwlock_wrlock(&alloc_lock);
