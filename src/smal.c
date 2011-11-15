@@ -339,7 +339,8 @@ void _smal_mark_ptr_tail(void *, void*);
 
 #if SMAL_MARK_QUEUE
 #include "mark_queue.h"
-#define smal_after_mark_func() smal_mark_queue_mark(0)
+// #define smal_after_mark_func() smal_mark_queue_mark(0)
+#define smal_after_mark_func() ((void) 0)
 #else
 #define smal_after_mark_func() ((void) 0)
 #endif
