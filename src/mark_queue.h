@@ -43,7 +43,7 @@ void smal_mark_queue_new()
 #endif
   smal_mark_queue *new_s = malloc(sizeof(*new_s));
   new_s->front = new_s->ptrs;
-  new_s->back = new_s->ptrs + (smal_mark_queue_SIZE - 2);
+  new_s->back = new_s->ptrs + smal_mark_queue_SIZE;
   new_s->prev = mark_queue;
   mark_queue = new_s;
 }
@@ -113,7 +113,7 @@ void smal_mark_queue_add(void *referrer, int ptr_n, void **ptrs, int pointers_to
       void **ptr_p = *(ptrs ++);
       void *ptr = ptr_p ? *ptr_p : 0;
       if ( ptr ) {
-	if ( mark_queue->front > mark_queue->back )
+	if ( mark_queue->front >= mark_queue->back )
 	  smal_mark_queue_new();
 	*(mark_queue->front ++) = referrer;
 	*(mark_queue->front ++) = ptr;
@@ -127,7 +127,7 @@ void smal_mark_queue_add(void *referrer, int ptr_n, void **ptrs, int pointers_to
     while ( -- ptr_n >= 0 ) {
       void *ptr = *(ptrs ++);
       if ( ptr ) {
-	if ( mark_queue->front > mark_queue->back )
+	if ( mark_queue->front >= mark_queue->back )
 	  smal_mark_queue_new();
 	*(mark_queue->front ++) = referrer;
 	*(mark_queue->front ++) = ptr;
