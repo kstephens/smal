@@ -21,7 +21,7 @@ void run_test()
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
     assert(stats.alloc_id == 1);
-    assert(stats.free_id == 0); // FIXME: WTF?; REGISTERS?
+    assert(stats.free_id == 1);
   }
 
   global = smal_alloc(my_cons_type);
