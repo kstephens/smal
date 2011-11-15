@@ -8,8 +8,9 @@
 #define smal_mark_queue_SIZE 1020
 
 typedef struct smal_mark_queue {
-  void **front, **back;
+  void **front; // , **back;
   void *ptrs[smal_mark_queue_SIZE];
+  void *back[0];
   struct smal_mark_queue *prev;
 } smal_mark_queue;
 
@@ -43,7 +44,7 @@ void smal_mark_queue_new()
 #endif
   smal_mark_queue *new_s = malloc(sizeof(*new_s));
   new_s->front = new_s->ptrs;
-  new_s->back = new_s->ptrs + smal_mark_queue_SIZE;
+  // new_s->back = new_s->ptrs + smal_mark_queue_SIZE;
   new_s->prev = mark_queue;
   mark_queue = new_s;
 }
