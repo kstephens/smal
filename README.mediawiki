@@ -80,7 +80,7 @@ Since SMAL does not compact or relocate objects during collection, it attempts t
 
 == Collection Scheduling ==
 
-SAML has no default collection scheduling algorithm or policy.  Users must decide on when to call <code>smal_collect()</code>.
+SMAL has no default collection scheduling algorithm or policy.  Users must decide on when to call <code>smal_collect()</code>.
 
 == Memory Alignment ==
 
