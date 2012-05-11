@@ -1,5 +1,6 @@
 #include "smal/callback.h"
 #include "smal/dllist.h"
+#include "smal/thread.h"
 #include <stdlib.h> /* malloc(), free() */
 
 void smal_callbacks_init(smal_callbacks *cbs)
