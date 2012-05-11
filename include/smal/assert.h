@@ -22,6 +22,8 @@
 #if NASSERT
 #define smal_assert(EXPR, TEST)	(EXPR)
 #else
+#include <stdio.h> /* fprintf(), stderr */
+#include <stdlib.h> /* abort() */
 #define smal_assert(EXPR, TEST)						\
   ({									\
     int __result = (EXPR);						\
