@@ -5,7 +5,7 @@
 #include <assert.h>
 
 #define my_ASSERT(X,E)							\
-  ({									\
+  (void) ({                                                              \
     int _result = (X);							\
     fprintf(stderr, "  %s:%d %s = %d\n", __FILE__, __LINE__, #X, _result); \
     if ( ! (_result E) ) {						\

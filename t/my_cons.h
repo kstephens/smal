@@ -25,7 +25,7 @@ static void * my_cons_mark (void *ptr)
   return ((my_cons *) ptr)->cdr;
 }
 
-void my_print_stats()
+void _my_print_stats(const char *file, int line)
 {
   smal_stats stats = { 0 };
   int i;
@@ -36,4 +36,5 @@ void my_print_stats()
   }
   fprintf(stderr, "\n");
 }
+#define my_print_stats() _my_print_stats(__FILE__, __LINE__)
 

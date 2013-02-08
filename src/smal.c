@@ -764,13 +764,13 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
 static inline
 void smal_buffer_pause_allocations(smal_buffer *self)
 {
-  smal_thread_lock_lock(&self->alloc_disabled);
+  (void) smal_thread_lock_lock(&self->alloc_disabled);
 }
 
 static inline
 void smal_buffer_resume_allocations(smal_buffer *self)
 {
-  smal_thread_lock_unlock(&self->alloc_disabled);
+  (void) smal_thread_lock_unlock(&self->alloc_disabled);
 }
 
 static inline
@@ -1419,7 +1419,7 @@ void *_smal_collect_sweep_buffers(void *arg)
 	     buffer_head.stats.free_n
 	    );
 
-  smal_thread_lock_unlock(&_smal_collect_inner_lock);
+  (void) smal_thread_lock_unlock(&_smal_collect_inner_lock);
 
   // fprintf(stderr, "_smal_collect_sweep_buffers(): DONE\n");
   {

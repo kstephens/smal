@@ -64,7 +64,7 @@ void run_test()
   global = x;
   x = 0;
   smal_collect();
-  my_print_stats(__LINE__);
+  my_print_stats();
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
@@ -75,7 +75,7 @@ void run_test()
 
   x = y = 0;
   smal_collect();
-  my_print_stats(__LINE__);
+  my_print_stats();
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);

@@ -43,7 +43,7 @@ void run_test()
   fprintf(stderr, "actual_alloc_n = %lu\n", (unsigned long) actual_alloc_n);
   alloc_n = actual_alloc_n;
 
-  my_print_stats(__LINE__);
+  my_print_stats();
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
@@ -52,7 +52,7 @@ void run_test()
   }
 
   smal_collect();
-  my_print_stats(__LINE__);
+  my_print_stats();
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
@@ -62,7 +62,7 @@ void run_test()
 
   x = y = global = 0;
   smal_collect();
-  my_print_stats(__LINE__);
+  my_print_stats();
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);

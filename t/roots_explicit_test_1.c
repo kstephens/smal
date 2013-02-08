@@ -70,7 +70,7 @@ void run_test()
   global = x;
   x = 0;
   smal_collect();
-  my_print_stats(__LINE__);
+  my_print_stats();
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
@@ -81,7 +81,7 @@ void run_test()
   other_global = global;
   x = y = global = 0;
   smal_collect();
-  my_print_stats(__LINE__);
+  my_print_stats();
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
@@ -92,7 +92,7 @@ void run_test()
   smal_roots_remove_callback(cb_handle);
   cb_handle = 0;
   smal_collect();
-  my_print_stats(__LINE__);
+  my_print_stats();
   {
     smal_stats stats = { 0 };
     smal_global_stats(&stats);
