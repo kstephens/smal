@@ -1,0 +1,3 @@
+[submodule "src/hash"]
+	path = src/hash
+	url = ../hash.git
