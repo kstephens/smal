@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 # -*- ruby -*-
 require 'rubygems'
+=begin
 case RUBY_VERSION
 when /^1\.9/
   gem 'ruby-debug19'
@@ -9,6 +10,7 @@ else
   gem 'ruby-debug'
   require 'ruby-debug'
 end
+=end
 
 class AssemblyCallGraph
   attr_reader :procedures, :codes_by_label
@@ -484,8 +486,6 @@ end # class
 
 
 require 'rubygems'
-gem 'ruby-debug'
-require 'ruby-debug'
 require 'pp'
 acg = AssemblyCallGraph.new
 s_file = "src/smal.s"
