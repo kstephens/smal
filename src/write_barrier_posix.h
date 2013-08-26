@@ -36,12 +36,12 @@ void smal_get_sig_info(int sig, siginfo_t *si, void *something)
   case SIGBUS:
     sig_name = "SIGBUS";
     switch ( si->si_code ) {
-#ifdef BUG_ADRALN
+#ifdef BUS_ADRALN
     case BUS_ADRALN:
       si_code_name = "BUS_ADRALN";
       break;
 #endif
-#ifdef BUG_ADDRERR
+#ifdef BUS_ADRERR
     case BUS_ADRERR:
       si_code_name = "BUS_ADRERR";
       break;
