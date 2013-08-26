@@ -55,8 +55,9 @@ T_LIBS := $(LIBS_THREAD) #
 
 all : $(SRC_LIB) $(TESTS_T)
 
+GCC_ASM_OPTS=-Wa,-a,-ad
 src/smal.s : src/smal.c $(H_FILES) Makefile
-	$(CC) $(CFLAGS:-g=) -DSMAL_NASSERT=1 -DNASSERT=1 -DSMAL_DEBUG=0 -S -fverbose-asm -Wa,-a,-ad -v -o $@ $<
+	$(CC) $(CFLAGS:-g=) -DSMAL_NASSERT=1 -DNASSERT=1 -DSMAL_DEBUG=0 -S -fverbose-asm -v -o $@ $<
 
 src/hash/voidP_voidP_Table.o : src/hash/*.c src/hash/*.h src/hash/*.def
 src/hash/voidP_Table.o : src/hash/*.c src/hash/*.h src/hash/*.def
