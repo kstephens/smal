@@ -720,6 +720,7 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
 
   /* Free bits cover entire mmap area: see smal_buffer_ptr_i(). */
   self->free_bits.size = 
+    self->grey_bits.size =
     self->mark_bits.size = (self->mmap_size / self->object_size) + 1;
   assert(self->mark_bits.size >= self->object_capacity);
 
@@ -728,6 +729,10 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
     goto done;
   }
   if ( smal_unlikely(smal_bitmap_init(&self->free_bits) < 0) ) {
+    result = -1;
+    goto done;
+  }
+  if ( smal_unlikely(smal_bitmap_init(&self->grey_bits) < 0) ) {
     result = -1;
     goto done;
   }
@@ -822,6 +827,7 @@ void smal_buffer_free(smal_buffer *self)
   // Free bitmaps.
   smal_bitmap_free(&self->free_bits);
   smal_bitmap_free(&self->mark_bits);
+  smal_bitmap_free(&self->grey_bits);
 
   smal_LOCK_STATS(lock);
   smal_UPDATE_STATS(capacity_n, -= self->stats.capacity_n);

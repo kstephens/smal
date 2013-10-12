@@ -143,6 +143,9 @@ struct smal_buffer {
   smal_bitmap free_bits;
   smal_thread_rwlock free_bits_lock;
 
+  smal_bitmap grey_bits;
+  smal_thread_rwlock grey_bits_lock;
+
   void *free_list; /** Free list of previously allocated but currently unused objects. */
   smal_thread_mutex free_list_mutex;
 
