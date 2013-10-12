@@ -1,15 +1,15 @@
 #ifdef __APPLE__
-#define exn_init smal_write_barrier_init_os
+#define exn_init smal_buffer_write_barrier_init_os
 static void exn_init();
 #define my_handle_exn smal_write_barrier_mutation
 #else
-void smal_write_barrier_init_os();
+void smal_buffer_write_barrier_init_os();
 #endif
 
 static inline
-void smal_write_barrier_init()
+void smal_buffer_write_barrier_init()
 {
-  smal_write_barrier_init_os();
+  smal_buffer_write_barrier_init_os();
 }
 
 static inline
@@ -131,9 +131,9 @@ void smal_buffer_assume_mutation(smal_buffer *self)
 }
 
 #ifdef __APPLE__
-#include "write_barrier_mach.h"
+#include "buffer_write_barrier_mach.h"
 #endif
 
 #ifdef __linux__
-#include "write_barrier_posix.h"
+#include "buffer_write_barrier_posix.h"
 #endif

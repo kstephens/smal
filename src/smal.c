@@ -334,7 +334,7 @@ static inline
 void _smal_mark_ptr_tail(void *, void*);
 
 #if SMAL_BUFFER_WRITE_BARRIER
-#include "write_barrier.h"
+#include "buffer_write_barrier.h"
 #endif
 
 #if SMAL_MARK_QUEUE
@@ -1743,7 +1743,7 @@ static void _initialize()
 #if 0
   smal_debug_set_level(smal_debug_mprotect, 9);
   smal_debug_set_level(smal_debug_mmap, 9);
-  smal_debug_set_level(smal_debug_write_barrier, 9);
+  smal_debug_set_level(smal_debug_buffer_write_barrier, 9);
   fprintf(stderr, "smal: pid = %d\n", (int) getpid());
 #endif
 
@@ -1790,7 +1790,7 @@ static void _initialize()
   buffer_table_mark_size = buffer_table_size;
 
 #if SMAL_BUFFER_WRITE_BARRIER
-  smal_write_barrier_init();
+  smal_buffer_write_barrier_init();
 #endif
 
   initialized = 1;

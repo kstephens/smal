@@ -123,7 +123,7 @@ void setup_signal_handler(int sig)
   assert(result == 0);
 }
 
-void smal_write_barrier_init_os()
+void smal_buffer_write_barrier_init_os()
 {
 #ifdef SIGSEGV
   setup_signal_handler(SIGSEGV);
