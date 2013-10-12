@@ -333,7 +333,7 @@ void* _smal_mark_ptr(void *, void*);
 static inline
 void _smal_mark_ptr_tail(void *, void*);
 
-#if SMAL_WRITE_BARRIER
+#if SMAL_BUFFER_WRITE_BARRIER
 #include "write_barrier.h"
 #endif
 
@@ -528,7 +528,7 @@ void smal_buffer_table_remove(smal_buffer *self)
 static inline
 int smal_buffer_set_object_size(smal_buffer *self, size_t object_size);
 
-#ifdef SMAL_WRITE_BARRIER
+#ifdef SMAL_BUFFER_WRITE_BARRIER
 void smal_buffer_write_unprotect(smal_buffer *);
 #endif
 
@@ -641,7 +641,7 @@ smal_buffer *smal_buffer_alloc(smal_type *type)
 
   smal_thread_lock_init(&self->alloc_disabled);
 
-#if SMAL_WRITE_BARRIER
+#if SMAL_BUFFER_WRITE_BARRIER
   smal_thread_rwlock_init(&self->write_protect_lock);
   smal_thread_rwlock_init(&self->mutation_lock);
 #endif
@@ -737,7 +737,7 @@ int smal_buffer_set_object_size(smal_buffer *self, size_t object_size)
     goto done;
   }
 
-#if SMAL_WRITE_BARRIER
+#if SMAL_BUFFER_WRITE_BARRIER
   if ( self->type->desc.mostly_unchanging )
     self->mutation_write_barrier = 
       self->use_remembered_set = 1;
@@ -799,7 +799,7 @@ void smal_buffer_free(smal_buffer *self)
   assert(in_collect || in_shutdown);
 
   // Disable write barrier.
-#if SMAL_WRITE_BARRIER
+#if SMAL_BUFFER_WRITE_BARRIER
   smal_buffer_write_unprotect(self);
 #endif
 
@@ -847,7 +847,7 @@ void smal_buffer_free(smal_buffer *self)
 
   smal_thread_lock_destroy(&self->alloc_disabled);
 
-#if SMAL_WRITE_BARRIER
+#if SMAL_BUFFER_WRITE_BARRIER
   smal_thread_rwlock_destroy(&self->write_protect_lock);
   smal_thread_rwlock_destroy(&self->mutation_lock);
 #endif
@@ -1074,7 +1074,7 @@ void *smal_buffer_alloc_object(smal_buffer *self)
     smal_thread_mutex_unlock(&self->alloc_ptr_mutex);
   }
 
-#if SMAL_WRITE_BARRIER
+#if SMAL_BUFFER_WRITE_BARRIER
   /* Assume buffer is mutated because we are allocating from it. */
   if ( smal_likely(ptr) )
     smal_buffer_assume_mutation(self); 
@@ -1235,7 +1235,7 @@ void smal_buffer_sweep(smal_buffer *self)
   /* Sweep this time? */
   if ( smal_likely(self->sweepable) ) {
 
-#if SMAL_WRITE_BARRIER
+#if SMAL_BUFFER_WRITE_BARRIER
     /* Avoid spurious write barrier faults during sweep. */
     smal_buffer_write_unprotect(self); 
 #endif
@@ -1292,7 +1292,7 @@ void smal_buffer_sweep(smal_buffer *self)
     /* Buffer can possibly be allocated from. */
     smal_buffer_resume_allocations(self);
 
-#if SMAL_WRITE_BARRIER
+#if SMAL_BUFFER_WRITE_BARRIER
     /* Clear mutation bit and prepare write barrier. */
     smal_buffer_clear_mutation(self);
 #endif
@@ -1789,7 +1789,7 @@ static void _initialize()
   buffer_table_mark = buffer_table;
   buffer_table_mark_size = buffer_table_size;
 
-#if SMAL_WRITE_BARRIER
+#if SMAL_BUFFER_WRITE_BARRIER
   smal_write_barrier_init();
 #endif
 

@@ -12,11 +12,11 @@
 
 /* Configuration */
 
-#ifndef SMAL_WRITE_BARRIER
-#define SMAL_WRITE_BARRIER 1
+#ifndef SMAL_BUFFER_WRITE_BARRIER
+#define SMAL_BUFFER_WRITE_BARRIER 1
 #endif
 
-#if SMAL_WRITE_BARRIER && (defined(__APPLE__) || defined(__linux__))
+#if SMAL_BUFFER_WRITE_BARRIER && (defined(__APPLE__) || defined(__linux__))
 #define SMAL_SEGREGATE_BUFFER_FROM_PAGE 1
 #endif
 
