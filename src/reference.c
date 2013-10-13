@@ -116,22 +116,21 @@ smal_reference * smal_reference_create_weak(void *ptr, smal_reference_queue *ref
   }
   smal_thread_mutex_unlock(&referred_table_mutex);
 
-  smal_thread_mutex_lock(&reference->mutex);
-
   if ( ref_queue ) {
     smal_reference_queue_list *ref_queue_list = malloc(sizeof(*ref_queue_list));
     if ( ref_queue_list ) {
       smal_thread_mutex_lock(&ref_queue->mutex);
       ref_queue_list->reference_queue = ref_queue;
+      smal_thread_mutex_lock(&reference->mutex);
       ref_queue_list->next = reference->reference_queue_list;
       reference->reference_queue_list = ref_queue_list;
+      smal_thread_mutex_unlock(&reference->mutex);
       smal_thread_mutex_unlock(&ref_queue->mutex);
     } else {
       error = 1;
     }
   }
 
-  smal_thread_mutex_unlock(&reference->mutex);
   return error ? 0 : reference;
 }
 
