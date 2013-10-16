@@ -7,6 +7,7 @@
 #include "smal/finalizer.h"
 #include "smal/thread.h"
 #include "smal/assert.h"
+#include "smal/internal.h"
 
 #include <stdio.h>
 
@@ -87,13 +88,13 @@ static void initialize()
 
 smal_type *smal_finalizer_type()
 {
-  if ( ! initialized ) initialize();
+  if ( smal_unlikely(! initialized) ) initialize();
   return smal_finalizer_type_;
 }
 
 smal_type *smal_finalized_type()
 {
-  if ( ! initialized ) initialize();
+  if ( smal_unlikely(! initialized) ) initialize();
   return smal_finalized_type_;
 }
 
@@ -124,7 +125,7 @@ smal_finalizer * smal_finalizer_create(void *ptr, void (*func)(smal_finalizer *f
 
   if ( ! ptr ) return 0;
 
-  if ( ! initialized ) initialize();
+  if ( smal_unlikely(! initialized) ) initialize();
 
   smal_thread_mutex_lock(&referred_table_mutex);
   if ( ! (finalized = find_finalized_by_referred(ptr)) ) {
@@ -160,7 +161,7 @@ smal_finalizer *smal_finalizer_remove_all(void *ptr)
   smal_finalized *finalized = 0;
   smal_finalizer *finalizer = 0;
 
-  if ( ! initialized ) initialize();
+  if ( smal_unlikely(! initialized) ) initialize();
 
   smal_thread_mutex_lock(&referred_table_mutex);
   if ( (finalized = find_finalized_by_referred(ptr)) ) {
@@ -186,7 +187,7 @@ smal_finalizer *smal_finalizer_copy_all(void *ptr, void *to_ptr)
   if ( ! ptr || ! to_ptr || to_ptr == ptr )
     return 0;
 
-  if ( ! initialized ) initialize();
+  if ( smal_unlikely(! initialized) ) initialize();
 
   smal_thread_mutex_lock(&referred_table_mutex);
   finalized = find_finalized_by_referred(ptr);
@@ -237,7 +238,7 @@ void smal_finalizer_after_mark_1()
 {
   if ( _smal_finalizer_debug ) fprintf(stderr, "  smal_finalizer_after_mark_1()\n");
   assert(before_mark_called);
-  if ( ! initialized ) initialize();
+  if ( smal_unlikely(! initialized) ) initialize();
 
   smal_thread_mutex_lock(&referred_table_mutex);
   {
@@ -272,7 +273,7 @@ void smal_finalizer_after_mark()
 {
   smal_finalizer_after_mark_1();
   if ( _smal_finalizer_debug ) fprintf(stderr, "  smal_finalizer_after_mark()\n");
-  if ( ! initialized ) initialize();
+  if ( smal_unlikely(! initialized) ) initialize();
   assert(before_mark_called);
   // smal_thread_mutex_lock(&finalized_queue_mutex); // see referred_sweeped().
   smal_thread_mutex_lock(&referred_table_mutex);
@@ -300,7 +301,7 @@ int smal_finalizer_sweep_some(int n)
 {
   int aborted = 0;
   smal_finalized *finalized;
-  if ( ! initialized ) initialize();
+  if ( smal_unlikely(! initialized) ) initialize();
   smal_thread_mutex_lock(&finalized_queue_mutex);
   while ( (finalized = finalized_queue) ) {
     smal_finalizer *finalizer;
